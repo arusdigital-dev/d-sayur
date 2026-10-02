@@ -3,10 +3,17 @@ import { getProducts, getCategories } from "@/lib/storefront";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  const [firstPage, categories] = await Promise.all([
-    getProducts({ page: 1, limit: 48 }),
-    getCategories(),
-  ]);
+  let firstPage;
+  let categories;
+  try {
+    [firstPage, categories] = await Promise.all([getProducts({ page: 1, limit: 48 }), getCategories()]);
+  } catch {
+    return [
+      { url: baseUrl, changeFrequency: "daily", priority: 1 },
+      { url: new URL("/products", baseUrl).toString(), changeFrequency: "daily", priority: 0.9 },
+      { url: new URL("/categories", baseUrl).toString(), changeFrequency: "weekly", priority: 0.8 },
+    ];
+  }
   const productPages = await Promise.all(
     Array.from({ length: Math.ceil(Math.max(0, firstPage.total - firstPage.items.length) / 48) }, (_, index) =>
       getProducts({ page: index + 2, limit: 48 }),

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="dsayur_loyalty_program" model="loyalty.program">
+            <field name="name">D-Sayur Member Rewards</field>
+            <field name="program_type">loyalty</field>
+            <field name="applies_on">future</field>
+            <field name="trigger">auto</field>
+            <field name="portal_visible" eval="True"/>
+            <field name="portal_point_name">Poin D-Sayur</field>
+            <field name="sale_ok" eval="True"/>
+            <field name="rule_ids" eval="[(5, 0, 0), (0, 0, {'reward_point_amount': 0.001, 'reward_point_mode': 'money', 'minimum_qty': 1, 'minimum_amount': 0, 'minimum_amount_tax_mode': 'excl'})]"/>
+            <field name="reward_ids" eval="[(5, 0, 0), (0, 0, {'reward_type': 'discount', 'discount_mode': 'per_point', 'discount': 10, 'discount_applicability': 'order', 'required_points': 1, 'description': 'Tukar poin D-Sayur'})]"/>
+        </record>
+        <record id="dsayur_silver_voucher_program" model="loyalty.program">
+            <field name="name">D-Sayur Silver Tier Voucher</field>
+            <field name="program_type">coupons</field>
+            <field name="applies_on">current</field>
+            <field name="trigger">with_code</field>
+            <field name="sale_ok" eval="True"/>
+            <field name="reward_ids" eval="[(5, 0, 0), (0, 0, {'reward_type': 'discount', 'discount_mode': 'per_order', 'discount': 20000, 'discount_applicability': 'order', 'required_points': 1, 'description': 'Voucher Member Silver'})]"/>
+        </record>
+        <record id="dsayur_gold_voucher_program" model="loyalty.program">
+            <field name="name">D-Sayur Gold Tier Voucher</field>
+            <field name="program_type">coupons</field>
+            <field name="applies_on">current</field>
+            <field name="trigger">with_code</field>
+            <field name="sale_ok" eval="True"/>
+            <field name="reward_ids" eval="[(5, 0, 0), (0, 0, {'reward_type': 'discount', 'discount_mode': 'per_order', 'discount': 50000, 'discount_applicability': 'order', 'required_points': 1, 'description': 'Voucher Member Gold'})]"/>
+        </record>
+    </data>
+</odoo>

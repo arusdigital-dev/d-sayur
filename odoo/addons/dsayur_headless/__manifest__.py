@@ -1,0 +1,20 @@
+{
+    "name": "D-Sayur Headless Storefront API",
+    "author": "D-Sayur",
+    "summary": "Thin same-origin storefront API using native Odoo eCommerce",
+    "version": "20.0.1.1.0",
+    "category": "Website/eCommerce",
+    "license": "LGPL-3",
+    "depends": ["website_sale", "website_sale_stock", "delivery", "payment", "auth_signup", "sales_team", "sale_loyalty", "payment_custom"],
+    "data": [
+        "security/ir.access.csv",
+        "data/loyalty_data.xml",
+        "views/delivery_slot_views.xml",
+        "views/loyalty_program_views.xml",
+        "views/product_views.xml",
+        "views/sale_order_views.xml",
+    ],
+    "installable": True,
+    "application": False,
+    "auto_install": False,
+}

@@ -10,8 +10,8 @@ type ManagedProduct = {
   category_ids: number[]; categories: string[]; image: string; sku: string | null; stock_quantity: number;
 };
 type ProductCategory = { id: number; name: string };
-type ProductInput = { name: string; price: number; description: string; published: boolean; category_ids: number[]; sku: string; stock_quantity: number };
-const blank: ProductInput = { name: "", price: 0, description: "", published: false, category_ids: [], sku: "", stock_quantity: 10 };
+type ProductInput = { name: string; price: number; description: string; published: boolean; category_ids: number[]; sku: string };
+const blank: ProductInput = { name: "", price: 0, description: "", published: false, category_ids: [], sku: "" };
 const money = (value: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value);
 
 export function ProductManager() {
@@ -44,7 +44,7 @@ export function ProductManager() {
 
   function edit(product: ManagedProduct) {
     setSelected(product.id);
-    setForm({ name: product.name, price: product.price, description: product.description, published: product.published, category_ids: product.category_ids, sku: product.sku ?? "", stock_quantity: product.stock_quantity });
+    setForm({ name: product.name, price: product.price, description: product.description, published: product.published, category_ids: product.category_ids, sku: product.sku ?? "" });
   }
   function newProduct() { setSelected(null); setForm(blank); setError(""); }
   function searchProducts() { setLoading(true); setError(""); void load(search); }
@@ -81,13 +81,13 @@ export function ProductManager() {
       <form className="admin-product-form" onSubmit={save}>
         <div className="admin-form-heading"><div className="eyebrow"><span /> {selected ? `PRODUK #${selected}` : "PRODUK BARU"}</div><h2>{selected ? "Ubah produk" : "Tambah produk"}</h2></div>
         <label>Nama produk<input required maxLength={200} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
-        <div className="admin-fields-row"><label>SKU<input maxLength={80} value={form.sku} onChange={(event) => setForm({ ...form, sku: event.target.value })} placeholder="Otomatis jika kosong" /></label><label>Stok tersedia<input required type="number" min="0" step="1" value={form.stock_quantity} onChange={(event) => setForm({ ...form, stock_quantity: Number(event.target.value) })} /></label></div>
+        <div className="admin-fields-row"><label>SKU<input maxLength={80} value={form.sku} onChange={(event) => setForm({ ...form, sku: event.target.value })} placeholder="Dikelola di Odoo" /></label><p className="muted-copy">Stok tersedia: {selected ? products.find((product) => product.id === selected)?.stock_quantity ?? 0 : "Atur di Inventory Odoo"}</p></div>
         <label>Harga (IDR)<input required type="number" min="0" step="1" value={form.price} onChange={(event) => setForm({ ...form, price: Number(event.target.value) })} /></label>
         <label>Deskripsi<textarea rows={4} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
         <fieldset><legend>Kategori</legend>{categories.length > 0 && <div className="admin-category-options">{categories.map((category) => <label key={category.id}><input type="checkbox" checked={form.category_ids.includes(category.id)} onChange={(event) => setForm({ ...form, category_ids: event.target.checked ? [...form.category_ids, category.id] : form.category_ids.filter((id) => id !== category.id) })} />{category.name}</label>)}</div>}<div className="admin-add-category"><input value={newCategory} onChange={(event) => setNewCategory(event.target.value)} placeholder="Buat kategori baru" /><button type="button" onClick={() => void addCategory()}>Tambah</button></div></fieldset>
         <label className="admin-publish"><input type="checkbox" checked={form.published} onChange={(event) => setForm({ ...form, published: event.target.checked })} /> Tampilkan di toko</label>
         <button className="primary-button" disabled={saving || loading}>{saving ? "Menyimpan…" : "Simpan produk"}<span>↗</span></button>
-        <p className="muted-copy">Data produk, stok, dan kategori disimpan di database PostgreSQL D-Sayur.</p>
+        <p className="muted-copy">Katalog dan kategori disimpan di Odoo. Atur kuantitas stok melalui Inventory Odoo agar tercatat sebagai operasi persediaan.</p>
       </form>
     </div>
   </section>;

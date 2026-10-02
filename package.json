@@ -5,16 +5,12 @@
   "scripts": {
     "dev": "next dev",
     "dev:all": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-all.ps1",
-    "db:setup": "node scripts/setup-app-db.mjs",
-    "db:seed-products": "node scripts/seed-products.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
-    "@types/pg": "^8.23.1",
     "next": "16.3.8",
-    "pg": "^8.23.1",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },

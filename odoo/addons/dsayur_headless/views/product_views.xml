@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="dsayur_product_template_form" model="ir.ui.view">
+        <field name="name">product.template.form.dsayur</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_only_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="D-Sayur" name="dsayur">
+                    <group>
+                        <group string="Tampilan toko">
+                            <field name="dsayur_badge"/>
+                            <field name="dsayur_sale_unit_label" placeholder="per 250 g"/>
+                            <field name="dsayur_weighed"/>
+                            <field name="dsayur_price_per_kg"/>
+                        </group>
+                        <group string="Cerita UMKM">
+                            <field name="dsayur_umkm_name"/>
+                            <field name="dsayur_umkm_origin"/>
+                            <field name="dsayur_umkm_story"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="dsayur_sale_order_form" model="ir.ui.view">
+        <field name="name">sale.order.form.dsayur</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_dsayur_start_packing" type="object" string="Mulai packing"
+                        invisible="state not in ('sale', 'done') or dsayur_packing_started_at"/>
+            </xpath>
+            <xpath expr="//group[@name='sale_info']" position="inside">
+                <field name="dsayur_packing_started_at"/>
+                <field name="dsayur_completed_at"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="dsayur_review_tiers_action" model="ir.actions.server">
+        <field name="name">D-Sayur: jalankan evaluasi tier sekarang</field>
+        <field name="model_id" ref="base.model_res_partner"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_review_tiers(force=True)</field>
+    </record>
+    <menuitem id="dsayur_review_tiers_menu" name="Evaluasi Tier (demo)" parent="dsayur_operations_root" action="dsayur_review_tiers_action" sequence="30" groups="sales_team.group_sale_manager"/>
+</odoo>

@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="dsayur_delivery_slot_list" model="ir.ui.view">
+        <field name="name">dsayur.delivery.slot.list</field>
+        <field name="model">dsayur.delivery.slot</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="name"/>
+                <field name="start_at"/>
+                <field name="end_at"/>
+                <field name="capacity"/>
+                <field name="priority_tier"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+    <record id="dsayur_delivery_slot_form" model="ir.ui.view">
+        <field name="name">dsayur.delivery.slot.form</field>
+        <field name="model">dsayur.delivery.slot</field>
+        <field name="arch" type="xml">
+            <form string="Delivery Slot">
+                <sheet>
+                    <group>
+                        <field name="name" placeholder="Contoh: Kirim besok pagi"/>
+                        <field name="start_at"/>
+                        <field name="end_at"/>
+                        <field name="capacity"/>
+                        <field name="priority_tier"/>
+                        <field name="active"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="dsayur_delivery_slot_action" model="ir.actions.act_window">
+        <field name="name">Delivery Slots</field>
+        <field name="res_model">dsayur.delivery.slot</field>
+        <field name="view_mode">list,form</field>
+    </record>
+    <menuitem id="dsayur_operations_root" name="D-Sayur Operations" parent="base.menu_custom" sequence="80" groups="sales_team.group_sale_manager"/>
+    <menuitem id="dsayur_delivery_slot_menu" name="Delivery Slots" parent="dsayur_operations_root" action="dsayur_delivery_slot_action" sequence="10" groups="sales_team.group_sale_manager"/>
+
+    <record id="dsayur_stock_alert_list" model="ir.ui.view">
+        <field name="name">dsayur.stock.alert.list</field>
+        <field name="model">dsayur.stock.alert</field>
+        <field name="arch" type="xml">
+            <list create="false" delete="false">
+                <field name="create_date"/>
+                <field name="product_id"/>
+                <field name="email"/>
+                <field name="state"/>
+                <field name="mail_id"/>
+            </list>
+        </field>
+    </record>
+    <record id="dsayur_stock_alert_action" model="ir.actions.act_window">
+        <field name="name">Notifikasi Stok</field>
+        <field name="res_model">dsayur.stock.alert</field>
+        <field name="view_mode">list</field>
+    </record>
+    <menuitem id="dsayur_stock_alert_menu" name="Notifikasi Stok" parent="dsayur_operations_root" action="dsayur_stock_alert_action" sequence="20" groups="sales_team.group_sale_manager"/>
+
+    <record id="dsayur_stock_alert_cron" model="ir.cron">
+        <field name="name">D-Sayur: back-in-stock notifications</field>
+        <field name="model_id" ref="model_dsayur_stock_alert"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_notify_restock()</field>
+        <field name="interval_number">15</field>
+        <field name="interval_type">minutes</field>
+        <field name="active" eval="True"/>
+    </record>
+
+    <record id="dsayur_delivery_pickup" model="delivery.carrier">
+        <field name="name">Ambil sendiri di toko</field>
+        <field name="fixed_price">0.0</field>
+        <field name="sequence">1</field>
+        <field name="delivery_type">fixed</field>
+        <field name="dsayur_is_pickup" eval="True"/>
+        <field name="is_published" eval="True"/>
+        <field name="product_id" ref="delivery.product_product_delivery"/>
+    </record>
+    <record id="dsayur_delivery_routes" model="delivery.carrier">
+        <field name="name">Antar D-Sayur</field>
+        <field name="sequence">2</field>
+        <field name="delivery_type">dsayur_routes</field>
+        <field name="is_published" eval="True"/>
+        <field name="product_id" ref="delivery.product_product_delivery"/>
+    </record>
+    <record id="dsayur_order_completion_cron" model="ir.cron">
+        <field name="name">D-Sayur: complete delivered orders</field>
+        <field name="model_id" ref="sale.model_sale_order"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_complete_delivered_orders()</field>
+        <field name="interval_number">30</field>
+        <field name="interval_type">minutes</field>
+        <field name="active" eval="True"/>
+    </record>
+    <record id="dsayur_tier_review_cron" model="ir.cron">
+        <field name="name">D-Sayur: review customer tiers</field>
+        <field name="model_id" ref="base.model_res_partner"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_review_tiers()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="active" eval="True"/>
+    </record>
+</odoo>
