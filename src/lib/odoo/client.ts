@@ -1,4 +1,5 @@
 import "server-only";
+import { readFileSync } from "node:fs";
 
 const baseUrl = () => {
   const value = process.env.ODOO_URL;
@@ -7,7 +8,8 @@ const baseUrl = () => {
 };
 
 export async function odooRequest(path: string, init: RequestInit = {}) {
-  const key = process.env.ODOO_API_KEY;
+  const key = process.env.ODOO_API_KEY
+    || (process.env.ODOO_API_KEY_FILE ? readFileSync(process.env.ODOO_API_KEY_FILE, "utf8").trim() : "");
   if (!key) throw new Error("ODOO_NOT_CONFIGURED");
   // `init.headers` may be a Headers instance (BFF, customerData), which cannot be spread into an object:
   // copy it through Headers so Content-Type and the Odoo session cookie are forwarded, then pin the server-side ones.

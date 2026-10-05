@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { connection } from "next/server";
 import { notFound } from "next/navigation";
-import { getCategory } from "@/lib/storefront";
-import { categoryIcon } from "@/lib/category-icon";
+import { getCategories, getCategory, getProducts } from "@/lib/storefront";
+import { CatalogToolbar } from "@/components/product/catalog-toolbar";
 import { ProductGrid } from "@/components/product/product-grid";
-import { SortChips, parseSort } from "@/components/product/sort-chips";
+import { parseSort } from "@/components/product/sort-chips";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -13,12 +12,19 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   return { title: category?.name ?? "Kategori" };
 }
 
-export default async function CategoryPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ sort?: string }> }) {
+export default async function CategoryPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ search?: string; sort?: string }> }) {
   await connection();
   const { slug } = await params;
-  const sort = parseSort((await searchParams).sort);
-  const category = await getCategory(slug);
+  const query = await searchParams;
+  const search = (query.search ?? "").slice(0, 100);
+  const sort = parseSort(query.sort) ?? "price_asc";
+  const [category, categories, result] = await Promise.all([
+    getCategory(slug), getCategories().catch(() => []), getProducts({ categorySlug: slug, search, sort }).catch(() => null),
+  ]);
   if (!category) notFound();
-  const products = sort === "price_asc" ? [...category.products].sort((a, b) => a.price.amount - b.price.amount) : sort === "price_desc" ? [...category.products].sort((a, b) => b.price.amount - a.price.amount) : category.products;
-  return <main className="catalog-page"><div className="catalog-heading"><div className="eyebrow"><span /> KATEGORI PILIHAN</div><h1><span className="cat-icon" aria-hidden="true">{categoryIcon(category.name)}</span>{category.name}<em>.</em></h1><p>Produk dari katalog D-Sayur.</p>{category.children.length > 0 && <nav className="chip-row" aria-label="Subkategori">{category.children.map((child) => <Link key={child.id} className="chip" href={`/categories/${child.slug}`}>{child.name}</Link>)}</nav>}<SortChips basePath={`/categories/${slug}`} sort={sort} /></div>{products.length ? <ProductGrid products={products} /> : <div className="catalog-empty"><span className="empty-art" aria-hidden="true">🥕</span><h2>Belum ada produk di kategori ini.</h2></div>}</main>;
+  const products = result?.items ?? category.products;
+  return <main className="catalog-page ds-catalog"><CatalogToolbar categories={categories} selectedCategory={slug} search={search} sort={sort} basePath={`/categories/${slug}`} title={category.name} />
+    {category.children.length > 0 && <nav className="ds-catalog-subcategories" aria-label="Subkategori">{category.children.map((child) => <a key={child.id} href={`/categories/${child.slug}`}>{child.name}</a>)}</nav>}
+    {products.length ? <ProductGrid products={products} /> : <div className="catalog-empty"><h2>Belum ada produk di {category.name}</h2></div>}
+  </main>;
 }

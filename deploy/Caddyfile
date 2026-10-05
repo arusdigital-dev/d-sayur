@@ -1,0 +1,22 @@
+{$DOMAIN} {
+    encode zstd gzip
+
+    @xendit path /payment/xendit/*
+    handle @xendit {
+        reverse_proxy odoo:8069
+    }
+
+    @odoo_return path /dsayur/return
+    handle @odoo_return {
+        reverse_proxy odoo:8069
+    }
+
+    handle {
+        reverse_proxy storefront:3000
+    }
+}
+
+{$ODOO_DOMAIN} {
+    encode zstd gzip
+    reverse_proxy odoo:8069
+}

@@ -2,12 +2,14 @@ import hmac
 import logging
 import math
 import re
+import secrets
+
+import requests
 
 from odoo import fields, http
 from odoo.fields import Command
 from odoo.fields import Domain
 from odoo.http import request
-from odoo.http.session import authenticate
 from odoo.release import version as odoo_version
 from odoo.tools import html2plaintext
 
@@ -70,8 +72,10 @@ class DSayurHeadless(http.Controller):
                 "attributes": [{"name": line.attribute_id.name, "value": line.name} for line in variant.product_template_attribute_value_ids],
                 "price": self._money(pricelist._get_product_price(variant, 1.0) if pricelist else variant.list_price, pricelist.currency_id if pricelist else website.currency_id),
                 "available": (not template.is_storable) or template.allow_out_of_stock_order or variant.free_qty > 0,
+                "stock_on_hand": variant.qty_available if variant.is_storable else 0,
             } for variant in template.product_variant_ids if variant.active],
             "available": any((not variant.is_storable) or template.allow_out_of_stock_order or variant.free_qty > 0 for variant in template.product_variant_ids),
+            "stock_on_hand": sum(template.product_variant_ids.filtered(lambda variant: variant.active and variant.is_storable).mapped("qty_available")),
             "badge": {"code": template.dsayur_badge, "label": dict(template._fields["dsayur_badge"].selection).get(template.dsayur_badge)} if template.dsayur_badge else None,
             "unit_label": template.dsayur_sale_unit_label or "",
             "price_per_kg": self._money(template.dsayur_price_per_kg, pricelist.currency_id if pricelist else website.currency_id) if template.dsayur_price_per_kg else None,
@@ -156,6 +160,25 @@ class DSayurHeadless(http.Controller):
         if order and order._is_anonymous_cart():
             order.partner_id = partner
 
+    def _start_customer_session(self, user):
+        """Start an Odoo commerce session after D-Sayur credential verification.
+
+        The customer password is checked against dsayur.customer.account, never
+        against res.users. Odoo's user only provides portal ACLs and native cart
+        ownership; its own password remains separate and undisclosed.
+        """
+        session = request.session
+        session.should_rotate = True
+        session.update({
+            "db": request.db,
+            "login": user.login,
+            "uid": user.id,
+            "context": dict(user.context_get()),
+            "session_token": user._compute_session_token(session.sid),
+        })
+        user._after_session_login()
+        request.update_env(user=user.id)
+
     def _checkout_incomplete(self, order, partner):
         if not order or not order.order_line.filtered(lambda row: not row.is_delivery and not row.display_type):
             return self._fail("CART_EMPTY", "Keranjang tidak tersedia.", 400)
@@ -234,6 +257,49 @@ class DSayurHeadless(http.Controller):
             if estimate is None:
                 return self._fail("AREA_UNAVAILABLE", "Jarak belum dapat dihitung. Coba lagi nanti atau pilih ambil sendiri.", 503)
             return self._reply({**estimate, "pickup_available": True})
+
+        if method == "GET" and key == "reverse-geocode":
+            try:
+                latitude = float(request.httprequest.args.get("lat"))
+                longitude = float(request.httprequest.args.get("lng"))
+                if not math.isfinite(latitude) or not math.isfinite(longitude) or not -90 <= latitude <= 90 or not -180 <= longitude <= 180:
+                    raise ValueError
+            except (TypeError, ValueError):
+                return self._fail("LOCATION_INVALID", "Koordinat lokasi tidak valid.", 400)
+
+            api_key = request.env["ir.config_parameter"].sudo().get_str("dsayur_headless.ors_api_key", "") or ""
+            if not api_key:
+                return self._fail("GEOCODER_UNAVAILABLE", "Pencarian alamat belum dikonfigurasi.", 503)
+            try:
+                response = requests.get(
+                    "https://api.heigit.org/pelias/v1/reverse",
+                    params={"point.lat": latitude, "point.lon": longitude, "size": 1},
+                    headers={"Authorization": api_key, "Accept": "application/json"},
+                    timeout=8,
+                )
+                response.raise_for_status()
+                features = response.json().get("features") or []
+            except (requests.RequestException, ValueError, AttributeError):
+                _logger.exception("ORS reverse geocoding failed")
+                return self._fail("GEOCODER_UNAVAILABLE", "Alamat belum dapat ditemukan. Coba lagi sebentar.", 503)
+            if not features:
+                return self._fail("ADDRESS_NOT_FOUND", "Alamat di lokasi ini tidak ditemukan.", 404)
+
+            properties = features[0].get("properties") or {}
+            street_name = properties.get("street") or properties.get("name") or ""
+            house_number = properties.get("housenumber") or ""
+            street = " ".join(part for part in (street_name, house_number) if part).strip()
+            city = properties.get("locality") or properties.get("localadmin") or properties.get("county") or properties.get("region") or ""
+            return self._reply({
+                "label": properties.get("label") or street,
+                "street": street or properties.get("label") or "",
+                "street2": properties.get("neighbourhood") or properties.get("borough") or "",
+                "city": city,
+                "region": properties.get("region") or "",
+                "zip": properties.get("postalcode") or "",
+                "latitude": latitude,
+                "longitude": longitude,
+            })
 
         if method == "GET" and len(parts) == 2 and parts[0] == "products":
             # website_url is computed (not searchable) in Odoo 20; the slug ends with the template id ("name-77").
@@ -571,11 +637,10 @@ class DSayurHeadless(http.Controller):
             password = payload.get("password") or ""
             if not login or not password or len(password) > 256:
                 return self._fail("INVALID_CREDENTIALS", "Username/email dan kata sandi wajib diisi.", 400)
-            try:
-                authenticate(request.session, request.env, {"login": login, "password": password, "type": "password"})
-                request.update_env(user=request.session.uid)
-            except Exception:
-                return self._fail("AUTHENTICATION_FAILED", "Username/email atau kata sandi salah.", 401)
+            user = request.env["dsayur.customer.account"].authenticate_dsayur(login, password)
+            if not user:
+                return self._fail("AUTHENTICATION_FAILED", "Email atau kata sandi akun D-Sayur salah.", 401)
+            self._start_customer_session(user)
             user = request.env.user
             customer = user.partner_id
             self._attach_cart_to_customer(customer)
@@ -588,15 +653,41 @@ class DSayurHeadless(http.Controller):
             phone = (payload.get("phone") or "").strip()
             if len(name) < 2 or len(name) > 120 or "@" not in email or len(password) < 8 or len(password) > 256:
                 return self._fail("REGISTRATION_INVALID", "Isi nama, email valid, dan kata sandi minimal 8 karakter.", 400)
+            Accounts = request.env["dsayur.customer.account"].sudo()
+            if Accounts.search_count([("email", "=", email)]):
+                return self._fail("EMAIL_IN_USE", "Email sudah memiliki akun D-Sayur. Silakan masuk atau gunakan pemulihan akun.", 409)
             try:
-                login, returned_password = request.env["res.users"].sudo().signup({"name": name, "login": email, "email": email, "password": password, "phone": phone})
-                request.env.cr.commit()
-                authenticate(request.session, request.env, {"login": login, "password": returned_password, "type": "password"})
-                request.update_env(user=request.session.uid)
+                Partner = request.env["res.partner"].sudo()
+                customer = Partner.search([("email", "=ilike", email)], limit=1)
+                if customer:
+                    user = customer.user_ids.filtered(lambda candidate: candidate.share)[:1]
+                    if customer.user_ids and not user:
+                        return self._fail("EMAIL_IN_USE", "Email ini digunakan akun internal toko. Gunakan email pelanggan yang berbeda.", 409)
+                    if user:
+                        customer.write({"name": name, "phone": phone})
+                else:
+                    customer = Partner.create({"name": name, "email": email, "phone": phone, "customer_rank": 1})
+                    user = request.env["res.users"]
+                if not user:
+                    portal = request.env.ref("base.group_portal")
+                    user = request.env["res.users"].sudo().with_context(no_reset_password=True).create({
+                        "name": name,
+                        "login": f"dsayur-{secrets.token_hex(24)}@accounts.invalid",
+                        "password": secrets.token_urlsafe(48),
+                        "partner_id": customer.id,
+                        "group_ids": [Command.set(portal.ids)],
+                    })
+                Accounts.create({
+                    "email": email,
+                    "password_hash": Accounts._hash_password(password),
+                    "partner_id": customer.id,
+                    "user_id": user.id,
+                })
+                self._start_customer_session(user)
             except Exception:
                 request.env.cr.rollback()
-                _logger.info("Odoo native customer signup rejected", exc_info=True)
-                return self._fail("REGISTRATION_FAILED", "Pendaftaran tidak berhasil. Pastikan pendaftaran pelanggan diaktifkan pada Odoo.", 400)
+                _logger.info("D-Sayur customer registration failed", exc_info=True)
+                return self._fail("REGISTRATION_FAILED", "Akun D-Sayur belum dapat dibuat. Periksa kembali email atau coba lagi.", 400)
             customer = request.env.user.partner_id
             self._attach_cart_to_customer(customer)
             return self._reply({"id": customer.id, "name": customer.name, "email": customer.email or "", "phone": customer.phone or ""}, status=201)

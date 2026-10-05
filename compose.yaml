@@ -1,0 +1,123 @@
+name: dsayur
+
+x-odoo-common: &odoo-common
+  image: odoo:20.0
+  environment:
+    HOST: db
+    PORT: 5432
+    USER: ${POSTGRES_USER:-odoo}
+    PASSWORD_FILE: /run/secrets/postgres_password
+  volumes:
+    - odoo-data:/var/lib/odoo
+    - ./odoo/addons:/mnt/extra-addons:ro
+    - ./deploy/odoo.conf:/etc/odoo/odoo.conf.template:ro
+    - ./deploy/odoo-start.sh:/opt/dsayur/odoo-start.sh:ro
+  secrets:
+    - postgres_password
+    - odoo_admin_password
+  depends_on:
+    db:
+      condition: service_healthy
+
+services:
+  db:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-odoo}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data/pgdata
+    secrets:
+      - postgres_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-odoo} -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  odoo:
+    <<: *odoo-common
+    restart: unless-stopped
+    command: ["/bin/bash", "/opt/dsayur/odoo-start.sh"]
+    ports:
+      - "127.0.0.1:8069:8069"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8069/web/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+
+  odoo-tools:
+    <<: *odoo-common
+    profiles: ["tools"]
+    restart: "no"
+    entrypoint: ["/bin/bash", "/opt/dsayur/odoo-start.sh"]
+    command: ["--stop-after-init", "--no-http"]
+    secrets:
+      - postgres_password
+      - odoo_admin_password
+      - dsayur_api_key
+      - ors_api_key
+      - xendit_secret_key
+      - xendit_webhook_token
+
+  storefront:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_SITE_URL: https://${DOMAIN:-dsayur.arusdigital.cloud}
+    restart: unless-stopped
+    environment:
+      ODOO_URL: http://odoo:8069
+      ODOO_DATABASE: ${ODOO_DATABASE:-dsayur}
+      ODOO_API_KEY_FILE: /run/secrets/dsayur_api_key
+      NEXT_PUBLIC_SITE_URL: https://${DOMAIN:-dsayur.arusdigital.cloud}
+    secrets:
+      - dsayur_api_key
+    depends_on:
+      odoo:
+        condition: service_healthy
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:-dsayur.arusdigital.cloud}
+      ODOO_DOMAIN: ${ODOO_DOMAIN:-dsayur-odoo.arusdigital.cloud}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      storefront:
+        condition: service_started
+      odoo:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  odoo-data:
+  caddy-data:
+  caddy-config:
+
+secrets:
+  postgres_password:
+    file: ./deploy/secrets/postgres_password
+  odoo_admin_password:
+    file: ./deploy/secrets/odoo_admin_password
+  dsayur_api_key:
+    file: ./deploy/secrets/dsayur_api_key
+  ors_api_key:
+    file: ./deploy/secrets/ors_api_key
+  xendit_secret_key:
+    file: ./deploy/secrets/xendit_secret_key
+  xendit_webhook_token:
+    file: ./deploy/secrets/xendit_webhook_token

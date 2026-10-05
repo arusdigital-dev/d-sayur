@@ -1,12 +1,12 @@
 /** Shared API shapes for the Odoo-backed storefront (all values come from the Odoo addon contract). */
 export type ProductImage = { url: string; alt: string };
 export type Money = { amount: number; currency: string; symbol: string; position: "before" | "after" };
-export type ProductVariant = { id: number; name: string; attributes: Array<{ name: string; value: string }>; price: Money; available: boolean };
+export type ProductVariant = { id: number; name: string; attributes: Array<{ name: string; value: string }>; price: Money; available: boolean; stock_on_hand?: number };
 export type ProductBadge = { code: "harvest_today" | "live_fish" | "ready_to_cook" | "umkm"; label: string };
 export type StoreProduct = {
   id: number; slug: string; name: string; description: string; price: Money; images: ProductImage[];
   category: { id: number; slug: string; name: string } | null; variants: ProductVariant[]; available: boolean;
-  badge?: ProductBadge | null; unit_label?: string; price_per_kg?: Money | null; weighed?: boolean;
+  badge?: ProductBadge | null; unit_label?: string; price_per_kg?: Money | null; weighed?: boolean; stock_on_hand?: number;
   umkm?: { name: string; origin: string; story: string } | null;
 };
 export type StoreCategory = { id: number; slug: string; name: string; image?: string };
@@ -31,3 +31,7 @@ export type CheckoutSnapshot = {
 };
 export type PaymentOptions = { providers: Array<{ id: number; name: string; code: string; flow: "redirect" | "direct"; methods: Array<{ id: number; name: string }> }> };
 export type AreaEstimate = { deliverable: boolean; distance_km: number; fee: number | null; pickup_available: boolean };
+export type ReverseGeocodeAddress = {
+  label: string; street: string; street2: string; city: string; region: string; zip: string;
+  latitude: number; longitude: number;
+};

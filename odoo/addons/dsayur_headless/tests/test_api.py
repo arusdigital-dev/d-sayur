@@ -29,6 +29,27 @@ class TestDSayurHeadlessApi(HttpCase):
         self.assertEqual(response.status_code, 403)
         self.assertFalse(response.json()["success"])
 
+    def test_dsayur_password_is_independent_from_odoo_password(self):
+        partner = self.env["res.partner"].create({"name": "Separate login test", "email": "separate-login@example.test"})
+        portal = self.env.ref("base.group_portal")
+        user = self.env["res.users"].with_context(no_reset_password=True).create({
+            "name": partner.name,
+            "login": "odoo-separate-login-test",
+            "partner_id": partner.id,
+            "password": "odoo-only-password",
+            "groups_id": [(6, 0, portal.ids)],
+        })
+        accounts = self.env["dsayur.customer.account"].sudo()
+        accounts.create({
+            "email": partner.email,
+            "password_hash": accounts._hash_password("dsayur-only-password"),
+            "partner_id": partner.id,
+            "user_id": user.id,
+        })
+
+        self.assertEqual(accounts.authenticate_dsayur(partner.email, "dsayur-only-password"), user)
+        self.assertFalse(accounts.authenticate_dsayur(partner.email, "odoo-only-password"))
+
     def test_order_has_persisted_substitution_preference(self):
         field = self.env["sale.order"]._fields.get("dsayur_substitution_policy")
         self.assertTrue(field, "The substitution choice must be stored on Odoo sales orders")
@@ -89,6 +110,8 @@ class TestDSayurHeadlessApi(HttpCase):
         self.assertEqual(data["badge"]["code"], "harvest_today")
         self.assertEqual(data["unit_label"], "per 250 g")
         self.assertTrue(data["weighed"])
+        self.assertEqual(data["stock_on_hand"], self.product.product_variant_id.qty_available)
+        self.assertIn("stock_on_hand", data["variants"][0])
         self.assertEqual(data["price_per_kg"]["amount"], 10000)
         self.assertEqual(data["umkm"]["name"], "UMKM Contoh")
 

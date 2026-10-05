@@ -10,7 +10,7 @@ if (-not $isAdmin) {
 
 Restart-Service -Name $serviceName -Force
 $service = Get-Service -Name $serviceName
-Write-Host "Service $serviceName: $($service.Status)"
+Write-Host "Service ${serviceName}: $($service.Status)"
 Start-Sleep -Seconds 12
 try {
     $response = Invoke-WebRequest -Uri 'http://localhost:8079/web/login' -UseBasicParsing -TimeoutSec 20

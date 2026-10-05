@@ -49,12 +49,27 @@ npm.cmd run dev:all
 
 `dev:all` memeriksa health endpoint, API key, database target, serta memastikan Odoo merespons sebagai versi 20; setelah itu menjalankan Next.js di `http://localhost:3000`. Service Windows Odoo/PostgreSQL pada workstation ini start otomatis. Hentikan Next.js dengan `Ctrl+C`; service Odoo/PostgreSQL tetap berjalan. Bisa juga gunakan `npm.cmd run dev`.
 
+## Deployment Docker
+
+Deployment produksi untuk `https://dsayur.arusdigital.cloud` tersedia di `compose.yaml` dan folder `deploy/`. Stack berisi Next.js standalone, Odoo Community 20, PostgreSQL 16, dan Caddy dengan HTTPS otomatis. PostgreSQL tidak dipublikasikan dan panel Odoo hanya bind ke loopback server.
+
+Key produksi disimpan sebagai Docker Compose secrets:
+
+| Secret | Lokasi server |
+|---|---|
+| ORS Basic Key | `deploy/secrets/ors_api_key` |
+| Xendit Secret API Key | `deploy/secrets/xendit_secret_key` |
+| Xendit Webhook Verification Token | `deploy/secrets/xendit_webhook_token` |
+| API internal Next.js ↔ Odoo | `deploy/secrets/dsayur_api_key` |
+
+Petunjuk instalasi, pengambilan key, webhook, akses panel Odoo, dan pembaruan ada di `deploy/README.md`.
+
 ## Kontrak saat ini
 
 Addon `dsayur_headless` menyediakan (semuanya lewat BFF Next.js, tanpa database bisnis di Next):
 
 - Katalog/kategori yang dipublikasikan, dengan pencarian, urutan (`sort=popular|price_asc|price_desc`), subkategori, label produk (Panen hari ini / Ikan hidup / Siap masak / UMKM), satuan jual, harga per kg, catatan "berat aktual", dan cerita UMKM. Field-nya ada di tab **D-Sayur** pada form produk Odoo.
-- Cart native (`sale.order`), catatan per item untuk petugas, alamat dengan pin peta, login/signup (`auth_signup`), riwayat order, "pesan lagi" (`POST orders/<id>/reorder`) dan saran "Beli lagi" (`GET reorder-suggestions`).
+- Cart native (`sale.order`), catatan per item untuk petugas, alamat dengan pin peta, login/signup D-Sayur dengan hash kata sandi storefront terpisah dari password Odoo, riwayat order, "pesan lagi" (`POST orders/<id>/reorder`) dan saran "Beli lagi" (`GET reorder-suggestions`). User Odoo tetap ditautkan untuk ACL dan cart native, tetapi password storefront tidak dipakai untuk login ke panel Odoo.
 - Checkout: carrier Odoo, slot kirim, preferensi pengganti, kode promo, tukar poin, voucher tier, lalu pembayaran lewat provider Odoo (`GET checkout/payment`, `POST checkout/transaction`). Provider **Transfer / QRIS manual** (`payment_custom`) aktif untuk demo; provider redirect (mis. Xendit) otomatis dipakai bila diaktifkan dan dikonfigurasi di Odoo.
 - Status pesanan sesuai riset: Menunggu bayar → Dibayar → **Dipacking** (admin menekan "Mulai packing" di Odoo atau di `/admin/orders`) → Dikirim/Siap diambil (validasi delivery order di Inventory) → Selesai (tombol "Pesanan diterima" atau otomatis 24 jam; pickup diselesaikan admin). Transfer manual dikonfirmasi admin lewat tombol "Konfirmasi pembayaran".
 - Member: tier Bronze/Silver/Gold (`GET member`, alias `loyalty`) lengkap dengan progres, tabel benefit, saldo dan riwayat poin. Menu **D-Sayur Operations → Evaluasi Tier (demo)** (dan tombol di `/admin/orders`) menjalankan evaluasi turun-tier tanpa menunggu tanggal 1.
@@ -64,17 +79,26 @@ Addon `dsayur_headless` menyediakan (semuanya lewat BFF Next.js, tanpa database 
 
 System Parameters Odoo yang dipakai: `dsayur_headless.api_key`, `dsayur_headless.ors_api_key`, `dsayur_headless.store_latitude`, `dsayur_headless.store_longitude`. Jangan isi koordinat toko berdasarkan perkiraan.
 
-> Catatan Odoo 20: file hak akses addon adalah `security/ir.access.csv` (model `ir.access`, bukan `ir.model.access`), cart diambil lewat `request.cart`, dan `domain` berupa objek `Domain`. Bila memperbarui addon, jalankan `odoo-bin ... -u dsayur_headless` lalu **restart service Odoo (butuh Administrator)** agar kode Python baru aktif.
+> Catatan Odoo 20: file hak akses addon adalah `security/ir.access.csv` (model `ir.access`, bukan `ir.model.access`), cart diambil lewat `request.cart`, dan `domain` berupa objek `Domain`. Pembaruan addon dapat dilakukan tanpa terminal: aktifkan Developer Mode → Apps → Update Apps List → cari **D-Sayur Headless Storefront API** → Upgrade, lalu restart service Odoo lewat aplikasi Windows Services.
 
 ## Data demo
 
-`odoo/seed/seed_demo.py` mengisi data dummy untuk demo tertutup (idempoten, aman diulang). Semua data contoh: gambar placeholder, harga contoh, UMKM fiktif.
+`odoo/seed/seed_demo.py` mengisi data dummy untuk demo tertutup (idempoten, aman diulang). Harga dan UMKM adalah contoh. `odoo/seed/seed_product_photos.py` mengisi foto katalog dari Wikimedia Commons dengan lisensi yang diizinkan; atribusi 64 foto tercatat di `odoo/seed/product_photo_credits.json`.
 
 ```powershell
 & "C:\Program Files\Odoo 20.0.20260930\python\python.exe" "C:\Program Files\Odoo 20.0.20260930\server\odoo-bin" shell -c "C:\Program Files\Odoo 20.0.20260930\server\odoo.conf" -d dsayur --http-port 8093 --max-cron-threads 0 < odoo\seed\seed_demo.py
 ```
 
-Seed membuat: mata uang IDR (perusahaan dan pricelist), 7 kategori, 64 produk dengan stok, 28 slot kirim (7 hari ke depan), provider Transfer manual, carrier terpublikasi (carrier demo bawaan Odoo diarsipkan), dan akun demo dengan sandi `demo1234`: `bronze@dsayur.demo`, `silver@dsayur.demo`, `gold@dsayur.demo`, serta staf `staff@dsayur.demo` (sales manager, untuk `/admin/*` dan backend Odoo). Ganti sandi ini sebelum demo dibuka di luar jaringan tertutup.
+Seed membuat: mata uang IDR, 7 kategori, 64 produk dengan stok, 28 slot kirim, provider Transfer manual, carrier D-Sayur, serta akun demo. Kredensial storefront D-Sayur berbeda dari kredensial user Odoo:
+
+| Akun storefront D-Sayur | Kata sandi D-Sayur | User Odoo yang ditautkan |
+|---|---|---|
+| `bronze@dsayur.demo` | `beliSayur123!` | `bronze@dsayur.demo` |
+| `silver@dsayur.demo` | `segarSilver123!` | `silver@dsayur.demo` |
+| `gold@dsayur.demo` | `segarGold123!` | `gold@dsayur.demo` |
+| `staff@dsayur.demo` | `dSayurAdmin2026!` | `staff@dsayur.demo` |
+
+User Odoo demo tetap memakai password Odoo `demo1234`; password storefront disimpan sebagai hash terpisah di model `dsayur.customer.account`. Ganti semua kredensial demo sebelum aplikasi dibuka ke publik.
 
 ## UI dari riset
 
@@ -82,11 +106,10 @@ Layout mobile-only (kolom maksimal 480 px di tengah layar, bottom navigation, PW
 
 Belum diaktifkan atau belum dikerjakan:
 
-- **Xendit** (QRIS/VA/e-wallet): modul `payment_xendit` ada di Odoo 20 tetapi butuh akun merchant sandbox, secret key, dan webhook publik. Setelah provider diaktifkan, checkout langsung memakai alur redirect; kembali dari Xendit masih mendarat di halaman Odoo (`/payment/status`), belum di halaman Next.
+- **Xendit** (QRIS/VA/e-wallet): deployment sudah memasang provider, menyimpan Secret Key/Webhook Token sebagai secret, dan mengembalikan pelanggan ke halaman konfirmasi Next.js. Key test/live dan aktivasi kanal tetap harus diselesaikan pada akun merchant Xendit.
 - Outgoing Mail Server Odoo (notifikasi restock dan email order).
 - Foto produk asli (saat ini placeholder) dan logo/ikon resmi DSayur; ikon PWA saat ini hanya monogram "d".
 - Flash sale lebih awal (program promo + `dsayur_minimum_tier` sudah didukung, jadwal dan promo perlu dibuat di Odoo), OTP WhatsApp, wishlist, rating, dan penggantian stok otomatis penuh.
-- Deploy staging (`docker-compose`) belum dibuat; proyek ini berjalan lokal di Windows tanpa Docker.
 - Pilih kecamatan pada cek area belum ada; cek area memakai lokasi/koordinat.
 - Klaim freshness dan rincian loyalti dari riset perlu disahkan sebelum tampil ke pelanggan.
 

@@ -6,3 +6,4 @@ from . import res_partner
 from . import sale_order_line
 from . import loyalty_program
 from . import product_template
+from . import customer_account

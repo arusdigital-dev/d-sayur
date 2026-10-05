@@ -248,12 +248,20 @@ valid_until = (today.replace(day=28) + timedelta(days=40)).replace(day=1) - time
 store_lat = float(env["ir.config_parameter"].sudo().get_str("dsayur_headless.store_latitude", "0.9189193"))
 store_lng = float(env["ir.config_parameter"].sudo().get_str("dsayur_headless.store_longitude", "104.505651"))
 portal = env.ref("base.group_portal")
+dsayur_demo_passwords = {
+    "bronze": "beliSayur123!",
+    "silver": "segarSilver123!",
+    "gold": "segarGold123!",
+}
+Accounts = env["dsayur.customer.account"].sudo()
 for tier, name in (("bronze", "Bu Rina (Bronze)"), ("silver", "Dimas (Silver)"), ("gold", "Pak Hendra (Gold)")):
     login = f"{tier}@dsayur.demo"
     user = env["res.users"].search([("login", "=", login)], limit=1)
     if not user:
         user = Users.create({"name": name, "login": login, "email": login, "password": "demo1234", "group_ids": [(6, 0, portal.ids)]})
     partner = user.partner_id
+    if not Accounts.search_count([("partner_id", "=", partner.id)]):
+        Accounts.create({"email": login, "password_hash": Accounts._hash_password(dsayur_demo_passwords[tier]), "partner_id": partner.id, "user_id": user.id})
     partner.write({"dsayur_tier": tier, "dsayur_tier_valid_until": valid_until if tier != "bronze" else False, "dsayur_tier_month": today.strftime("%Y-%m")})
     if not partner.child_ids.filtered(lambda row: row.type == "delivery"):
         env["res.partner"].create({
@@ -264,10 +272,14 @@ for tier, name in (("bronze", "Bu Rina (Bronze)"), ("silver", "Dimas (Silver)"),
 
 # staff account for the closed demo: sales manager + inventory manager (admin UI in Next.js and Odoo backend)
 staff_login = "staff@dsayur.demo"
-if not env["res.users"].search([("login", "=", staff_login)], limit=1):
+staff_user = env["res.users"].search([("login", "=", staff_login)], limit=1)
+if not staff_user:
     groups = env.ref("base.group_user") | env.ref("sales_team.group_sale_manager") | env.ref("stock.group_stock_manager")
-    Users.create({"name": "Staf D-Sayur (demo)", "login": staff_login, "email": staff_login, "password": "demo1234", "group_ids": [(6, 0, groups.ids)]})
-print("staff user:", staff_login, "/ demo1234")
+    staff_user = Users.create({"name": "Staf D-Sayur (demo)", "login": staff_login, "email": staff_login, "password": "demo1234", "group_ids": [(6, 0, groups.ids)]})
+if not Accounts.search_count([("partner_id", "=", staff_user.partner_id.id)]):
+    Accounts.create({"email": staff_login, "password_hash": Accounts._hash_password("dSayurAdmin2026!"), "partner_id": staff_user.partner_id.id, "user_id": staff_user.id})
+print("Odoo backend staff:", staff_login, "/ demo1234")
+print("D-Sayur demo credentials: bronze/beliSayur123!, silver/segarSilver123!, gold/segarGold123!, admin/dSayurAdmin2026!")
 
 env.cr.commit()
 print("SEED DONE")

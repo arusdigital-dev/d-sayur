@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { moneyLabel, storeApi } from "@/lib/store-api";
-import type { CartSnapshot, CheckoutSnapshot, PaymentOptions } from "@/types/store";
+import type { CartSnapshot, CheckoutSnapshot, PaymentOptions, ReverseGeocodeAddress } from "@/types/store";
+import { productPhoto } from "@/lib/product-photo";
 
 type CompletedOrder = { completed: boolean; redirect_url: string | null; order_id: number; order_number: string };
 
@@ -20,12 +22,28 @@ export function CheckoutForm({ initialSnapshot }: { initialSnapshot: CheckoutSna
   const [promoCode, setPromoCode] = useState("");
   const [substituteChoices, setSubstituteChoices] = useState<Record<number, string>>({});
   const [pin, setPin] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [addressDraft, setAddressDraft] = useState({ street: "", street2: "", city: "", zip: "" });
   const [providerId, setProviderId] = useState("");
   const [methodId, setMethodId] = useState("");
   const [substitutionPolicy, setSubstitutionPolicy] = useState(initialSnapshot?.substitution_policy ?? "contact_first");
   const [substitutionNote, setSubstitutionNote] = useState(initialSnapshot?.substitution_note ?? "");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+
+  function useCurrentLocation() {
+    if (!navigator.geolocation) { setError("Browser ini tidak mendukung deteksi lokasi."); return; }
+    setPending(true); setError("");
+    navigator.geolocation.getCurrentPosition(async ({ coords }) => {
+      const latitude = Number(coords.latitude.toFixed(6));
+      const longitude = Number(coords.longitude.toFixed(6));
+      try {
+        const address = await storeApi<ReverseGeocodeAddress>(`reverse-geocode?lat=${latitude}&lng=${longitude}`);
+        setPin({ latitude, longitude });
+        setAddressDraft({ street: address.street, street2: address.street2, city: address.city, zip: address.zip });
+      } catch (reason) { setError(reason instanceof Error ? reason.message : "Alamat belum dapat ditemukan."); }
+      finally { setPending(false); }
+    }, () => { setPending(false); setError("Izin lokasi ditolak. Aktifkan izin lokasi pada browser."); }, { enableHighAccuracy: true, timeout: 12000 });
+  }
 
   async function saveAddress(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setPending(true); setError("");
@@ -129,9 +147,8 @@ export function CheckoutForm({ initialSnapshot }: { initialSnapshot: CheckoutSna
   return <div className="checkout-layout"><div className="checkout-steps">
     <section className="checkout-panel"><div className="checkout-panel-title"><span>01</span><h2>Alamat pengiriman</h2></div><form className="checkout-address-form" onSubmit={saveAddress}>
       {snapshot.addresses.length > 0 && <label>Gunakan alamat tersimpan<select value={addressId} onChange={(event) => setAddressId(event.target.value)}><option value="">Masukkan alamat baru</option>{snapshot.addresses.map((address) => <option key={address.id} value={address.id}>{address.name} · {address.city}</option>)}</select></label>}
-      {!addressId && <div className="form-grid"><label>Nama penerima<input name="name" required /></label><label>Nomor telepon<input name="phone" type="tel" /></label><label className="field-wide">Alamat<input name="street" required /></label><label className="field-wide">Apartemen / patokan<input name="street2" /></label><label>Kota<input name="city" required /></label><label>Kode pos<input name="zip" required /></label><input type="hidden" name="country_id" value="1" /><label>Latitude pin<input name="latitude" type="number" step="any" value={pin?.latitude ?? ""} onChange={(event) => setPin((old) => ({ latitude: Number(event.target.value), longitude: old?.longitude ?? 0 }))} required /></label><label>Longitude pin<input name="longitude" type="number" step="any" value={pin?.longitude ?? ""} onChange={(event) => setPin((old) => ({ latitude: old?.latitude ?? 0, longitude: Number(event.target.value) }))} required /></label></div>}
-      <button className="secondary-button" type="button" disabled={pending} onClick={() => { if (!navigator.geolocation) { setError("Isi koordinat pin secara manual; browser ini tidak mendukung lokasi."); return; } navigator.geolocation.getCurrentPosition(({ coords }) => { setPin({ latitude: Number(coords.latitude.toFixed(6)), longitude: Number(coords.longitude.toFixed(6)) }); setError(""); }, () => setError("Izin lokasi ditolak. Aktifkan izin lokasi atau isi koordinat manual."), { enableHighAccuracy: true, timeout: 12000 }); }}>Gunakan lokasi saya</button>
-      {pin && <p className="muted-copy">Pin alamat: {pin.latitude}, {pin.longitude} · <a href={`https://www.openstreetmap.org/?mlat=${pin.latitude}&mlon=${pin.longitude}#map=16/${pin.latitude}/${pin.longitude}`} target="_blank" rel="noreferrer">Lihat peta</a></p>}
+      {!addressId && <><button className="secondary-button location-button" type="button" disabled={pending} onClick={useCurrentLocation}>{pending ? "Mencari alamat…" : "Gunakan lokasi saya"}</button><div className="form-grid"><label>Nama penerima<input name="name" required /></label><label>Nomor telepon<input name="phone" type="tel" /></label><label className="field-wide">Alamat lengkap<input name="street" required value={addressDraft.street} onChange={(event) => setAddressDraft((old) => ({ ...old, street: event.target.value }))} /></label><label className="field-wide">Kelurahan / patokan<input name="street2" value={addressDraft.street2} onChange={(event) => setAddressDraft((old) => ({ ...old, street2: event.target.value }))} /></label><label>Kota / kabupaten<input name="city" required value={addressDraft.city} onChange={(event) => setAddressDraft((old) => ({ ...old, city: event.target.value }))} /></label><label>Kode pos<input name="zip" required value={addressDraft.zip} onChange={(event) => setAddressDraft((old) => ({ ...old, zip: event.target.value }))} /></label><input type="hidden" name="country_id" value="1" /><input name="latitude" type="hidden" value={pin?.latitude ?? ""} /><input name="longitude" type="hidden" value={pin?.longitude ?? ""} /></div></>}
+      {pin && <p className="muted-copy">Alamat berhasil ditemukan · <a href={`https://www.openstreetmap.org/?mlat=${pin.latitude}&mlon=${pin.longitude}#map=16/${pin.latitude}/${pin.longitude}`} target="_blank" rel="noreferrer">Periksa di peta</a></p>}
       <button className="secondary-button" disabled={pending}>{pending ? "Menyimpan…" : "Simpan alamat"}</button>
     </form></section>
     <section className="checkout-panel"><div className="checkout-panel-title"><span>02</span><h2>Pengiriman</h2></div>{snapshot.delivery_methods.length ? <><label className="checkout-select">Pilih metode<select value={carrierId} onChange={(event) => setCarrierId(event.target.value)}><option value="">Pilih metode pengiriman</option>{snapshot.delivery_methods.map((method) => <option key={method.id} value={method.id}>{method.name} · {moneyLabel(method.price)}</option>)}</select></label>{selectedDelivery?.requires_slot && <label className="checkout-select">Slot pengantaran<select value={slotId} onChange={(event) => setSlotId(event.target.value)}><option value="">Pilih waktu</option>{snapshot.delivery_slots.map((slot) => <option key={slot.id} value={slot.id} disabled={!slot.remaining}>{new Date(`${slot.start_at.replace(" ", "T")}Z`).toLocaleString("id-ID")} · {slot.priority_tier === "gold" ? "Prioritas Gold · " : ""}sisa {slot.remaining}</option>)}</select></label>}<button className="secondary-button" disabled={!carrierId || pending || Boolean(selectedDelivery?.requires_slot && !slotId)} onClick={() => void saveDelivery()}>Gunakan metode ini</button></> : <p className="muted-copy">Belum ada metode pengiriman. Periksa pin alamat dan konfigurasi rute toko.</p>}</section>
@@ -145,5 +162,5 @@ export function CheckoutForm({ initialSnapshot }: { initialSnapshot: CheckoutSna
       {selectedProvider?.flow === "redirect" && <p className="muted-copy">Anda akan diarahkan ke halaman pembayaran Xendit, lalu kembali ke toko setelah membayar.</p>}
       <button className="primary-button" disabled={pending || !methodId} onClick={() => void placeOrder()}>{pending ? "Membuat pesanan…" : selectedProvider?.flow === "redirect" ? "Bayar dengan Xendit" : "Buat pesanan"}<span>↗</span></button></> : <p className="muted-copy">Metode pembayaran belum tersedia.</p>}</section>}
     {error && <p className="form-error" role="alert">{error}</p>}
-  </div><aside className="cart-summary checkout-summary"><h2>Ringkasan pesanan</h2>{snapshot.cart.lines.map((line)=><div key={line.id}><span>{line.product.name} × {line.quantity}</span><span>{moneyLabel(line.total)}</span></div>)}{snapshot.cart.totals && <><div><span>Subtotal</span><span>{moneyLabel(snapshot.cart.totals.subtotal)}</span></div><div><span>Pajak</span><span>{moneyLabel(snapshot.cart.totals.tax)}</span></div><div><span>Pengiriman</span><span>{moneyLabel(snapshot.cart.totals.shipping)}</span></div><div className="summary-total"><span>Total</span><strong>{moneyLabel(snapshot.cart.totals.total)}</strong></div></>}<p>Total dihitung ulang di server saat pesanan dibuat.</p></aside></div>;
+  </div><aside className="cart-summary checkout-summary"><h2>Pesanan</h2>{snapshot.cart.lines.map((line)=><div className="checkout-summary-line" key={line.id}><Image unoptimized src={productPhoto(line.product.name, line.product.image)} alt="" width={40} height={40} /><span>{line.product.name}<small>{line.quantity} × {moneyLabel(line.unit_price)}</small></span><strong>{moneyLabel(line.total)}</strong></div>)}{snapshot.cart.totals && <><div><span>Subtotal</span><span>{moneyLabel(snapshot.cart.totals.subtotal)}</span></div><div><span>Pajak</span><span>{moneyLabel(snapshot.cart.totals.tax)}</span></div><div><span>Pengiriman</span><span>{moneyLabel(snapshot.cart.totals.shipping)}</span></div><div className="summary-total"><span>Total</span><strong>{moneyLabel(snapshot.cart.totals.total)}</strong></div></>}<p>Total dihitung ulang di server saat pesanan dibuat.</p></aside></div>;
 }
