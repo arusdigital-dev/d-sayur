@@ -745,6 +745,16 @@ class DSayurHeadless(http.Controller):
                 "payment_status": transaction.state if transaction else "no_transaction",
                 "payment_method": transaction.provider_id.name if transaction else "",
                 "payment_instructions": html2plaintext(transaction.provider_id.pending_msg or "").strip() if transaction and transaction.state == "pending" else "",
+                "shipping_address": {
+                    "name": order.partner_shipping_id.name or "",
+                    "phone": order.partner_shipping_id.phone or order.partner_shipping_id.mobile or "",
+                    "street": order.partner_shipping_id.street or "",
+                    "street2": order.partner_shipping_id.street2 or "",
+                    "city": order.partner_shipping_id.city or "",
+                    "zip": order.partner_shipping_id.zip or "",
+                    "latitude": order.partner_shipping_id.partner_latitude or None,
+                    "longitude": order.partner_shipping_id.partner_longitude or None,
+                },
                 "fulfillment": [{
                     "reference": picking.name,
                     "status": picking.state,

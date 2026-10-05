@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { CartBadge } from "@/components/cart/cart-count";
 
@@ -15,14 +14,10 @@ const items = [
 
 export function BottomNav() {
   const path = usePathname();
-  const [pressedHref, setPressedHref] = useState<string | null>(null);
   const hidden = path.startsWith("/checkout") || /^\/account\/orders\/\d+/.test(path);
   return <nav className={`bottom-nav${hidden ? " is-hidden" : ""}`} aria-label="Navigasi utama">{items.map((item) => <Link
     href={item.href}
     key={item.href}
-    className={pressedHref === item.href ? "is-pressed" : undefined}
     aria-current={item.match(path) ? "page" : undefined}
-    onClick={() => setPressedHref(item.href)}
-    onAnimationEnd={() => setPressedHref((current) => current === item.href ? null : current)}
   >{item.svg}<span>{item.label}</span>{item.cart && <CartBadge />}</Link>)}</nav>;
 }

@@ -17,13 +17,13 @@ odoo_domain = os.environ.get("ODOO_DOMAIN", "dsayur-odoo.arusdigital.cloud").str
 storefront_url = f"https://{domain}"
 odoo_url = f"https://{odoo_domain}"
 
-params.set_param("dsayur_headless.api_key", secret("dsayur_api_key"))
-params.set_param("dsayur_headless.ors_api_key", secret("ors_api_key"))
-params.set_param("dsayur_headless.store_latitude", os.environ.get("STORE_LATITUDE", "0.9189193"))
-params.set_param("dsayur_headless.store_longitude", os.environ.get("STORE_LONGITUDE", "104.505651"))
-params.set_param("dsayur_headless.storefront_url", storefront_url)
-params.set_param("web.base.url", odoo_url)
-params.set_param("web.base.url.freeze", "True")
+params.set_str("dsayur_headless.api_key", secret("dsayur_api_key"))
+params.set_str("dsayur_headless.ors_api_key", secret("ors_api_key"))
+params.set_str("dsayur_headless.store_latitude", os.environ.get("STORE_LATITUDE", "0.9189193"))
+params.set_str("dsayur_headless.store_longitude", os.environ.get("STORE_LONGITUDE", "104.505651"))
+params.set_str("dsayur_headless.storefront_url", storefront_url)
+params.set_str("web.base.url", odoo_url)
+params.set_str("web.base.url.freeze", "True")
 
 provider = env["payment.provider"].sudo().search([("code", "=", "xendit")], limit=1)
 if not provider:

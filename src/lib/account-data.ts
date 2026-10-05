@@ -9,6 +9,7 @@ export type StoreOrderDetail = Omit<StoreOrder, "total"> & {
   payment_status: string;
   payment_method: string;
   payment_instructions: string;
+  shipping_address: { name: string; phone: string; street: string; street2: string; city: string; zip: string; latitude: number | null; longitude: number | null };
   progress_status: "pending_payment" | "paid" | "packing" | "delivered" | "ready_pickup" | "completed" | "cancelled";
   can_confirm_received: boolean;
   fulfillment: Array<{ reference: string; status: string; scheduled_date: string | null; completed_date: string | null }>;

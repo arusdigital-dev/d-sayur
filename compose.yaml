@@ -2,6 +2,9 @@ name: dsayur
 
 x-odoo-common: &odoo-common
   image: odoo:20.0
+  dns:
+    - 1.1.1.1
+    - 1.0.0.1
   environment:
     HOST: db
     PORT: 5432
@@ -84,14 +87,21 @@ services:
 
   proxy:
     image: caddy:2-alpine
+    dns:
+      - 1.1.1.1
+      - 1.0.0.1
     restart: unless-stopped
     environment:
       DOMAIN: ${DOMAIN:-dsayur.arusdigital.cloud}
       ODOO_DOMAIN: ${ODOO_DOMAIN:-dsayur-odoo.arusdigital.cloud}
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
+      VIRTUAL_HOST: "${DOMAIN:-dsayur.arusdigital.cloud},${ODOO_DOMAIN:-dsayur-odoo.arusdigital.cloud}"
+      VIRTUAL_PORT: "80"
+      VIRTUAL_PROTO: http
+      VIRTUAL_NETWORK: proxy_default
+      ACME_HOST: "${DOMAIN:-dsayur.arusdigital.cloud},${ODOO_DOMAIN:-dsayur-odoo.arusdigital.cloud}"
+      LETSENCRYPT_HOST: "${DOMAIN:-dsayur.arusdigital.cloud},${ODOO_DOMAIN:-dsayur-odoo.arusdigital.cloud}"
+    expose:
+      - "80"
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
@@ -101,12 +111,20 @@ services:
         condition: service_started
       odoo:
         condition: service_healthy
+    networks:
+      - default
+      - edge
 
 volumes:
   postgres-data:
   odoo-data:
   caddy-data:
   caddy-config:
+
+networks:
+  edge:
+    external: true
+    name: proxy_default
 
 secrets:
   postgres_password:

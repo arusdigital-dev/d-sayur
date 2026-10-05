@@ -645,13 +645,10 @@
 .product-add-button::after { width: 14px; height: 2px; }
 .ds-catalog .product-card h2 .product-card-unit { color: #fff !important; background-color: #0e4c3d !important; font-size: 7px; font-weight: 600; }
 
-/* Tactile feedback for the fixed storefront navigation. */
-.bottom-nav a.is-pressed{animation:ds-nav-press .34s cubic-bezier(.22,1,.36,1)}
-.bottom-nav a.is-pressed svg{animation:ds-nav-icon-pop .34s cubic-bezier(.22,1,.36,1)}
-@keyframes ds-nav-press{0%{transform:scale(1)}38%{transform:scale(.86)}72%{transform:scale(1.08)}100%{transform:scale(1)}}
-@keyframes ds-nav-icon-pop{0%{transform:translateY(0)}45%{transform:translateY(-3px) rotate(-5deg)}100%{transform:translateY(0) rotate(0)}}
-.bottom-nav a{overflow:hidden;transition:width .34s cubic-bezier(.22,1,.36,1),padding .34s cubic-bezier(.22,1,.36,1),background-color .3s ease,color .25s ease,box-shadow .3s ease}
-.bottom-nav a>span:not(.nav-badge){display:block!important;max-width:0;opacity:0;overflow:hidden;white-space:nowrap;transform:translateX(-7px);transition:max-width .34s cubic-bezier(.22,1,.36,1),opacity .24s ease .05s,transform .3s ease .04s}
+.bottom-nav a>span:not(.nav-badge){display:block!important;max-width:0;opacity:0;overflow:hidden;white-space:nowrap;transform:translateX(-7px)}
+.bottom-nav a:not([aria-current=page])>span:not(.nav-badge){display:none!important}
+.bottom-nav a svg{width:23px;height:23px}
+.bottom-nav a:not([aria-current=page]) svg{transform:translateY(3px)}
 .bottom-nav a[aria-current=page]{background-color:#0e4c3d;box-shadow:0 5px 14px #0e4c3d2b}
 .bottom-nav a[aria-current=page]>span:not(.nav-badge){max-width:72px;opacity:1;transform:translateX(0)}
 .address-editor>.location-button{width:100%;margin:0 0 14px;border-color:#0e4c3d;background:#edf5f1;color:#0e4c3d}
@@ -665,8 +662,6 @@
 @keyframes ds-location-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){
   .onboarding-screen,.onboarding-panel,.onboarding-produce,.onboarding-start{transition-duration:.01ms!important}
-  .bottom-nav a,.bottom-nav a>span:not(.nav-badge){transition-duration:.01ms!important}
-  .bottom-nav a.is-pressed,.bottom-nav a.is-pressed svg{animation:none!important}
   .location-loading span{animation:none!important}
 }
 
@@ -776,6 +771,70 @@
     width: 30px;
     height: 30px;
     min-width: 30px;
+    margin: 0;
+  }
+}
+
+/* Promo cards can be swiped or scrolled horizontally on every screen size. */
+.ds-promo {
+  display: flex;
+  width: calc(100% + 32px);
+  max-width: none;
+  height: 130px;
+  gap: 12px;
+  margin: 0 -16px;
+  padding: 0 16px;
+  box-sizing: border-box;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+}
+.ds-promo::-webkit-scrollbar { display: none; }
+.ds-promo-card {
+  flex: 0 0 min(338px, calc(100vw - 56px));
+  width: min(338px, calc(100vw - 56px));
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+.ds-promo-hint {
+  margin: 7px 0 0;
+  color: #858b83;
+  text-align: center;
+  font-size: 10px;
+}
+.ds-home .ds-promo-card .ds-promo-cta {
+  display: inline-flex;
+  width: fit-content;
+  max-width: max-content;
+  align-items: center;
+}
+@media (min-width: 701px) {
+  .ds-promo { width: 100%; margin: 0; padding: 0; }
+  .ds-promo-card { flex-basis: min(338px, calc(100% - 24px)); }
+}
+
+/* Keep checkout content sized to its mobile-style stack inside the desktop app canvas. */
+@media (min-width: 701px) {
+  .ds-checkout-page {
+    min-height: 0 !important;
+    padding: 64px 18px 36px !important;
+  }
+  .ds-checkout-page .checkout-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .ds-checkout-page .checkout-panel {
+    width: 100%;
+    margin: 0;
+  }
+  .ds-checkout-page .checkout-summary {
+    width: 100%;
+    position: static;
     margin: 0;
   }
 }

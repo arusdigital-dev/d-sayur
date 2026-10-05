@@ -15,7 +15,18 @@ async function handler(request: NextRequest, context: Context) {
   const isLogout = request.method === "POST" && path.join("/") === "auth/logout";
   if (request.method !== "GET") {
     const origin = request.headers.get("origin");
-    if (origin && origin !== new URL(request.url).origin) return error("FORBIDDEN", "Origin tidak diizinkan.", 403);
+    if (origin) {
+      const requestUrl = new URL(request.url);
+      const forwardedSsl = request.headers.get("x-forwarded-ssl")?.toLowerCase() === "on";
+      const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",", 1)[0]?.trim();
+      const protocol = forwardedSsl ? "https:" : forwardedProto ? `${forwardedProto}:` : requestUrl.protocol;
+      const host = request.headers.get("host") ?? requestUrl.host;
+      try {
+        if (new URL(origin).origin !== `${protocol}//${host}`) return error("FORBIDDEN", "Origin tidak diizinkan.", 403);
+      } catch {
+        return error("FORBIDDEN", "Origin tidak diizinkan.", 403);
+      }
+    }
   }
 
   const target = `/dsayur/api/${path.map(encodeURIComponent).join("/")}${request.nextUrl.search}`;

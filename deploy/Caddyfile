@@ -1,4 +1,4 @@
-{$DOMAIN} {
+http://{$DOMAIN} {
     encode zstd gzip
 
     @xendit path /payment/xendit/*
@@ -16,7 +16,7 @@
     }
 }
 
-{$ODOO_DOMAIN} {
+http://{$ODOO_DOMAIN} {
     encode zstd gzip
     reverse_proxy odoo:8069
 }

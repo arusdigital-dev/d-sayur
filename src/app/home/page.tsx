@@ -23,12 +23,12 @@ export default async function StoreHome() {
 
     <form className="ds-search" action="/products"><span aria-hidden="true">⌕</span><input name="search" aria-label="Cari produk" placeholder="Cari sayur, buah atau bumbu..." /><button aria-label="Cari">Cari</button></form>
 
-    <section className="ds-promo" aria-label="Promo dan pilihan produk">
+    <section className="ds-promo" aria-label="Promo dan pilihan produk" tabIndex={0}>
       <Link className="ds-promo-card ds-promo-green" href="/products"><Image src="/figma/promo-weekend.png" alt="Sayuran segar untuk pilihan harian" fill sizes="338px" /><span className="ds-promo-label">PILIHAN SEGAR</span><strong>Sayur segar<br />setiap hari</strong><span className="ds-promo-cta">Lihat produk →</span></Link>
       <Link className="ds-promo-card ds-promo-peach" href="/products"><Image src="/figma/promo-local.jpg" alt="Aneka sayur dan buah segar" fill sizes="338px" priority /><span className="ds-promo-label">PROMO AKHIR PEKAN</span><strong>Cuma di hari<br />Sabtu &amp; Minggu</strong><span className="ds-discount">30%</span><span className="ds-promo-cta">Belanja Sekarang</span></Link>
       <Link className="ds-promo-card ds-promo-yellow" href="/categories"><Image src="/figma/promo-fresh.png" alt="Pasar sayur dan buah" fill sizes="338px" /><span className="ds-promo-label">DARI PETANI LOKAL</span><strong>Segar setiap<br />hari untukmu</strong><span className="ds-promo-cta">Lihat produk →</span></Link>
     </section>
-    <div className="ds-dots" aria-hidden="true"><i /><i /><i /></div>
+    <p className="ds-promo-hint">Geser untuk melihat promo lainnya</p>
 
     <section className="ds-section ds-categories"><div className="ds-section-head"><h2>Kategori</h2><Link href="/categories">Lihat semua <span>→</span></Link></div><div className="ds-category-list">
       {categories.slice(0, 8).map((category) => <Link className="ds-category" href={`/categories/${category.slug}`} key={category.id}><Image className="ds-category-image" unoptimized src={category.image?.includes("/api/odoo-image/") ? categoryImage(category.name) : category.image || categoryImage(category.name)} alt="" width={24} height={24} /><span>{category.name}</span></Link>)}
