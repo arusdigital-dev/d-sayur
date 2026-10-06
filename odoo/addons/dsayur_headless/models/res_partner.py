@@ -6,6 +6,12 @@ from odoo import api, fields, models
 class ResPartner(models.Model):
     _inherit = "res.partner"
 
+    dsayur_default_delivery_address_id = fields.Many2one(
+        "res.partner",
+        string="Alamat utama D-Sayur",
+        copy=False,
+        ondelete="set null",
+    )
     dsayur_route_distance_m = fields.Integer(copy=False, readonly=True)
     dsayur_route_checked_at = fields.Datetime(copy=False, readonly=True)
     dsayur_route_fingerprint = fields.Char(copy=False, readonly=True)

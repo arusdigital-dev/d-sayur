@@ -14,7 +14,7 @@ const items = [
 
 export function BottomNav() {
   const path = usePathname();
-  const hidden = path.startsWith("/checkout") || /^\/account\/orders\/\d+/.test(path);
+  const hidden = path.startsWith("/checkout") || path.startsWith("/products/") || /^\/account\/orders\/\d+/.test(path);
   return <nav className={`bottom-nav${hidden ? " is-hidden" : ""}`} aria-label="Navigasi utama">{items.map((item) => <Link
     href={item.href}
     key={item.href}

@@ -7,7 +7,7 @@ import { SiteFooter, SiteHeader } from "@/components/layout/site-header";
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { Splash } from "@/components/layout/splash";
 
-export const viewport: Viewport = { themeColor: "#23543d", width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { themeColor: "#0E4C3D", width: "device-width", initialScale: 1 };
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),

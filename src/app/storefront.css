@@ -125,6 +125,8 @@ body{background:#e9ede2}
 .location-result>strong{font-size:12px;color:var(--green)}
 .location-result>small{font-size:10px;color:var(--muted);overflow-wrap:anywhere}
 .location-result>a{justify-self:start;color:var(--green);font-size:10px}
+.checkout-selected-address{margin-top:12px}
+.checkout-selected-address b{font-size:inherit}
 .app-shell:has(.order-tracking-page){padding-bottom:0;background:#f4f4f1}
 .app-shell:has(.order-tracking-page)>.announcement,.app-shell:has(.order-tracking-page)>.site-header,.app-shell:has(.order-tracking-page)>.site-footer,.app-shell:has(.order-tracking-page)>.bottom-nav{display:none}
 .order-tracking-page{min-height:100svh;display:flex;flex-direction:column;background:#f4f4f1}

@@ -17,7 +17,7 @@ export function CartView({ initialCart }: { initialCart: CartSnapshot | null }) 
     try {
       const updated = await storeApi<CartSnapshot>(`cart/lines/${lineId}`, { method: "PATCH", body: JSON.stringify({ quantity }) });
       setCart(updated);
-      window.dispatchEvent(new CustomEvent("dsayur:cart-updated", { detail: updated.quantity }));
+      window.dispatchEvent(new CustomEvent("dsayur:cart-updated", { detail: updated.lines.length }));
       setError("");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Perubahan belum berhasil.");
@@ -32,9 +32,9 @@ export function CartView({ initialCart }: { initialCart: CartSnapshot | null }) 
 
   if (error && !cart) return <div className="catalog-empty"><h2>Keranjang belum tersedia.</h2><p>{error}</p></div>;
   if (!cart) return <div className="catalog-empty"><h2>Keranjang belum tersedia.</h2><p>Coba muat ulang halaman.</p></div>;
-  if (!cart.lines.length) return <div className="ds-cart-empty"><svg className="ds-cart-mascot" viewBox="0 0 150 130" role="img" aria-label="Keranjang belanja kosong"><path d="M27 43h96l-8 56H44L27 43Z" fill="#f8f8f2" stroke="#0e4c3d" strokeWidth="5" strokeLinejoin="round"/><path d="m22 27 12 4 10 49m67-37 8-14m-64 15 9 20m27-20 1 20" fill="none" stroke="#0e4c3d" strokeWidth="5" strokeLinecap="round"/><circle cx="57" cy="66" r="8" fill="#f3cf6d"/><circle cx="80" cy="60" r="8" fill="#f3cf6d"/><circle cx="102" cy="67" r="8" fill="#f3cf6d"/><path d="M68 83q8 7 16 0" fill="none" stroke="#0e4c3d" strokeWidth="3" strokeLinecap="round"/><path d="M48 105h53m-43 0-4 11m37-11 4 11" fill="none" stroke="#0e4c3d" strokeWidth="5" strokeLinecap="round"/><path d="M68 25q-1-12 9-18m4 17q5-14 18-11" fill="none" stroke="#0e4c3d" strokeWidth="4" strokeLinecap="round"/></svg><h2>Keranjangmu masih kosong</h2><p>Yuk, isi dengan kebutuhan dapur favoritmu!</p><Link href="/home" className="primary-button">Mulai Berbelanja <span>🛒</span></Link></div>;
+  if (!cart.lines.length) return <div className="ds-cart-empty"><Image unoptimized className="ds-cart-mascot" src="/cart-empty-mascot.png" alt="Maskot D-Sayur" width={180} height={150} /><h2>Keranjangmu masih kosong</h2><p>Yuk, isi dengan kebutuhan dapur favoritmu!</p><Link href="/home" className="primary-button">Mulai Berbelanja <span>🛒</span></Link></div>;
 
-  return <div className="cart-layout"><section className="cart-lines"><p className="eyebrow"><span /> {cart.quantity} ITEM DI KERANJANG</p>
+  return <div className="cart-layout"><section className="cart-lines"><p className="eyebrow"><span /> {cart.lines.length} ITEM DI KERANJANG</p>
     {cart.lines.map((line) => <article className="cart-line" key={line.id}>
       <Image unoptimized src={productPhoto(line.product.name, line.product.image)} alt={line.product.name} width={82} height={82} />
       <div className="cart-line-info"><Link href={`/products/${line.product.slug}`}>{line.product.name}</Link><span>{line.variant_name || "Standar"} · {moneyLabel(line.unit_price)}</span><input className="line-note" aria-label={`Catatan untuk ${line.product.name}`} defaultValue={line.note ?? ""} maxLength={200} placeholder="Catatan untuk petugas, mis. ikan dibersihkan" onBlur={(event) => void saveNote(line.id, event.target.value, line.note ?? "")} /><button type="button" disabled={pendingLine === line.id} onClick={() => void update(line.id, 0)}>Hapus</button></div>

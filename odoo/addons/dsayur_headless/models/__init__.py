@@ -8,3 +8,4 @@ from . import loyalty_program
 from . import product_template
 from . import customer_account
 from . import payment_transaction
+from . import payment_data

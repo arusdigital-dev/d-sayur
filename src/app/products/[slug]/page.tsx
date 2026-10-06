@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
-import Image from "next/image";
 import { notFound } from "next/navigation";
 import { getProduct } from "@/lib/storefront";
 import { storefrontProductPhoto } from "@/lib/product-photo";
 import { AddToCartButton } from "@/components/product/add-to-cart-button";
 import { BadgeLabel, PriceMeta } from "@/components/product/product-meta";
+import { ProductGallery } from "@/components/product/product-gallery";
+import { BackButton } from "@/components/product/back-button";
+import { ProductSocialActions } from "@/components/product/product-social-actions";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   await connection();
@@ -28,5 +30,16 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     description: product.description.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim(), image: [photo],
     offers: { "@type": "Offer", priceCurrency: product.price.currency, price: product.price.amount, availability: product.available ? "https://schema.org/InStock" : "https://schema.org/OutOfStock", url: new URL(`/products/${product.slug}`, process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").toString() },
   };
-  return <main className="product-detail"><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }} /><div className="detail-image"><Image unoptimized fill sizes="(max-width: 850px) 86vw, 40vw" src={photo} alt={product.images[0]?.alt ?? product.name} /></div><div className="detail-copy"><div className="eyebrow"><span /> PILIHAN D-SAYUR</div><BadgeLabel product={product} /><h1>{product.name}</h1><PriceMeta product={product} withNote /><p className="detail-description">{product.description}</p>{product.umkm && <aside className="umkm-story" aria-label="Cerita UMKM"><small>CERITA UMKM</small><h2>{product.umkm.name}</h2>{product.umkm.origin && <p className="umkm-origin">📍 {product.umkm.origin}</p>}{product.umkm.story && <p>{product.umkm.story}</p>}</aside>}<AddToCartButton product={product} /><ul className="trust-list"><li>✓ Barang kosong? Kami hubungi atau ganti produk sejenis sesuai pilihan Anda saat checkout.</li><li>✓ Tidak segar? Ajukan tukar saat barang diterima.</li></ul><p className="stock-note">Ketersediaan, varian, dan harga diperiksa ulang saat menambahkan ke keranjang dan checkout.</p></div></main>;
+  return <main className="product-detail"><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }} />
+    <header className="detail-page-header"><BackButton iconOnly /><strong>Detail Produk</strong><span aria-hidden="true" /></header>
+    <div className="detail-gallery-column"><ProductGallery images={product.images} fallbackPhoto={photo} fallbackAlt={product.name} /></div>
+    <div className="detail-copy">
+      <div className="detail-title-row"><div><BadgeLabel product={product} /><h1>{product.name}</h1></div><ProductSocialActions name={product.name} /></div>
+      <PriceMeta product={product} withNote />
+      <AddToCartButton product={product} />
+      <section className="detail-description-block"><h2>Deskripsi</h2><p className="detail-description">{product.description}</p></section>
+      {product.umkm && <aside className="umkm-story" aria-label="Cerita UMKM"><small>CERITA UMKM</small><h2>{product.umkm.name}</h2>{product.umkm.origin && <p className="umkm-origin">📍 {product.umkm.origin}</p>}{product.umkm.story && <p>{product.umkm.story}</p>}</aside>}
+      <ul className="trust-list"><li>✓ Barang kosong? Kami hubungi atau ganti produk sejenis sesuai pilihan Anda saat checkout.</li><li>✓ Tidak segar? Ajukan tukar saat barang diterima.</li></ul><p className="stock-note">Ketersediaan, varian, dan harga diperiksa ulang saat menambahkan ke keranjang dan checkout.</p>
+    </div>
+  </main>;
 }

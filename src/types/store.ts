@@ -19,6 +19,7 @@ export type CartSnapshot = {
 export type ApiEnvelope<T> = { success: true; data: T };
 export type CheckoutSnapshot = {
   cart: CartSnapshot;
+  default_address_id: number | null;
   addresses: Array<{ id: number; name: string; street: string; street2: string; city: string; zip: string; phone: string; country_id: number; country: string; state_id: number | false; latitude?: number; longitude?: number }>;
   delivery_methods: Array<{ id: number; name: string; price: Money; requires_slot: boolean }>;
   delivery_slots: Array<{ id: number; name: string; start_at: string; end_at: string; remaining: number; priority_tier: "all" | "gold" }>;
@@ -28,6 +29,7 @@ export type CheckoutSnapshot = {
   countries: Array<{ id: number; name: string; code: string }>;
   substitution_policy: "contact_first" | "similar_ok" | "no_substitute";
   substitution_note: string;
+  is_gift: boolean;
 };
 export type PaymentOptions = { providers: Array<{ id: number; name: string; code: string; flow: "redirect" | "direct"; methods: Array<{ id: number; name: string }> }> };
 export type AreaEstimate = { deliverable: boolean; distance_km: number; fee: number | null; pickup_available: boolean };

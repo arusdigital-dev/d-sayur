@@ -5,7 +5,7 @@ type Context = { params: Promise<{ path: string[] }> };
 
 export async function GET(_request: NextRequest, context: Context) {
   const { path } = await context.params;
-  if (path.length !== 3 || !["product.template", "product.public.category"].includes(path[0]) || !/^\d+$/.test(path[1]) || !/^image_(128|256|512|1024)$/.test(path[2])) {
+  if (path.length !== 3 || !["product.template", "product.image", "product.public.category"].includes(path[0]) || !/^\d+$/.test(path[1]) || !/^image_(128|256|512|1024)$/.test(path[2])) {
     return NextResponse.json({ success: false, error: { code: "NOT_FOUND", message: "Gambar tidak ditemukan." } }, { status: 404 });
   }
   try {

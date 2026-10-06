@@ -7,7 +7,7 @@ const localImage = (url: string) => {
   try {
     const parsed = new URL(url);
     const parts = parsed.pathname.split("/").filter(Boolean);
-    if (parts[0] !== "web" || parts[1] !== "image" || !["product.template", "product.public.category"].includes(parts[2] ?? "") || !/^\d+$/.test(parts[3] ?? "") || !/^image_(128|256|512|1024)$/.test(parts[4] ?? "")) return url;
+    if (parts[0] !== "web" || parts[1] !== "image" || !["product.template", "product.image", "product.public.category"].includes(parts[2] ?? "") || !/^\d+$/.test(parts[3] ?? "") || !/^image_(128|256|512|1024)$/.test(parts[4] ?? "")) return url;
     return `/api/odoo-image/${parts.slice(2).map(encodeURIComponent).join("/")}?v=real-product-photos-2026-10`;
   } catch { return url; }
 };

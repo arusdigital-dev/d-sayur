@@ -13,7 +13,7 @@ export function ReorderButton({ orderId, label = "Pesan lagi", className = "seco
     setPending(true); setMessage("");
     try {
       const result = await storeApi<{ cart: CartSnapshot; added: number; skipped: string[] }>(`orders/${orderId}/reorder`, { method: "POST", body: "{}" });
-      window.dispatchEvent(new CustomEvent("dsayur:cart-updated", { detail: result.cart.quantity }));
+      window.dispatchEvent(new CustomEvent("dsayur:cart-updated", { detail: result.cart.lines.length }));
       router.push("/cart");
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : "Pesanan belum dapat diulang."); }
     finally { setPending(false); }

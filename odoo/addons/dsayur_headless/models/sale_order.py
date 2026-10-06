@@ -43,6 +43,7 @@ class SaleOrder(models.Model):
         size=500,
         copy=False,
     )
+    dsayur_is_gift = fields.Boolean(string="Kirim sebagai hadiah", default=False, copy=False)
 
     def _program_check_compute_points(self, programs):
         result = super()._program_check_compute_points(programs)
