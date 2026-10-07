@@ -11,6 +11,8 @@ compose=(docker compose --env-file deploy/.env.server)
 "${compose[@]}" pull db odoo proxy
 "${compose[@]}" build storefront
 "${compose[@]}" up -d db
+# Avoid concurrent cron writes while the one-off Odoo process upgrades modules.
+"${compose[@]}" stop odoo || true
 
 # Idempotent: creates the database on first deployment and upgrades it later.
 "${compose[@]}" --profile tools run --rm odoo-tools \
@@ -27,4 +29,7 @@ compose=(docker compose --env-file deploy/.env.server)
     < deploy/bootstrap_odoo.py
 
 "${compose[@]}" up -d odoo storefront proxy
+# The module upgrade runs in a one-off tools container. Restart the long-lived
+# Odoo worker so its in-memory registry picks up updated models and overrides.
+"${compose[@]}" restart odoo
 "${compose[@]}" ps

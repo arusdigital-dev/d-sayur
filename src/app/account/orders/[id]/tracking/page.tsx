@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AutoRefresh } from "@/components/account/auto-refresh";
 import { getOrder } from "@/lib/account-data";
+import { BackChevron } from "@/components/product/back-chevron";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -25,7 +26,8 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
   const pickup = order.progress_status === "ready_pickup";
   const currentStage = cancelled ? -1 : order.progress_status === "pending_payment" ? 0
     : order.progress_status === "paid" || order.progress_status === "packing" ? 1
-    : order.progress_status === "delivered" || pickup ? 2 : 3;
+    : order.progress_status === "delivered" || pickup ? 2
+    : order.progress_status === "completed" ? stages.length : 3;
   const mapAvailable = order.shipping_address.latitude != null && order.shipping_address.longitude != null;
   const latitude = order.shipping_address.latitude;
   const longitude = order.shipping_address.longitude;
@@ -39,7 +41,7 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
     {active && <AutoRefresh intervalMs={15000} maxTries={80} />}
     <section className="tracking-map" aria-label="Peta lokasi pengiriman">
       {mapSrc ? <iframe title="Peta tujuan pengiriman" src={mapSrc} loading="lazy" referrerPolicy="no-referrer" /> : <div className="tracking-map-empty"><span>⌖</span><strong>Pin lokasi belum tersedia</strong><small>Alamat tujuan dapat dilihat di detail pesanan.</small></div>}
-      <Link className="tracking-back" href={`/account/orders/${order.id}`} aria-label="Kembali ke detail pesanan">‹</Link>
+      <Link className="tracking-back" href={`/account/orders/${order.id}`} aria-label="Kembali ke detail pesanan"><BackChevron /></Link>
       {mapAvailable && <a className="tracking-map-link" href={`https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=17/${latitude}/${longitude}`} target="_blank" rel="noreferrer" aria-label="Buka peta tujuan">↗</a>}
       <div className="tracking-recipient"><span className="tracking-recipient-icon">⌖</span><div><small>Tujuan pengantaran{order.fulfillment[0] ? ` · ${order.fulfillment[0].reference}` : ""}</small><strong>{order.shipping_address.name || "Penerima pesanan"}</strong><span>{[order.shipping_address.street, order.shipping_address.street2, order.shipping_address.city].filter(Boolean).join(", ") || "Alamat belum tersedia"}</span></div>{order.shipping_address.phone && <a href={`tel:${order.shipping_address.phone}`} aria-label="Telepon penerima">☎</a>}</div>
     </section>

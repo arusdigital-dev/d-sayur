@@ -38,5 +38,18 @@ provider.write({
     "active": True,
 })
 
+invoice_provider = env.ref("payment.payment_provider_pay_on_invoice", raise_if_not_found=False)
+if invoice_provider:
+    invoice_provider.write({"name": "Pay on Invoice", "custom_mode": "pay_on_invoice", "active": True})
+
+cash_provider = env.ref("delivery.payment_provider_cod", raise_if_not_found=False)
+if cash_provider:
+    cash_provider.write({"name": "Tunai saat pesanan diterima", "is_published": True, "active": True})
+    cash_provider.payment_method_ids.filtered(lambda method: method.code == "cash_on_delivery").write({"active": True})
+
+env["delivery.carrier"].sudo().search([
+    ("delivery_type", "in", ["dsayur_routes", "fixed"]),
+]).write({"allow_cash_on_delivery": True})
+
 env.cr.commit()
 print(f"Bootstrap selesai: storefront={domain}, odoo={odoo_domain}, xendit_live={live_mode}")

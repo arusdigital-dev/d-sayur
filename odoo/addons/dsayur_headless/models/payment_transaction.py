@@ -26,8 +26,17 @@ class PaymentTransaction(models.Model):
         return super()._xendit_get_return_url()
 
     def _xendit_prepare_invoice_request_payload(self):
-        """Normalize optional customer fields to Xendit's accepted formats."""
+        """Normalize customer details and let Hosted Checkout offer active channels."""
         payload = super()._xendit_prepare_invoice_request_payload()
+        # D-Sayur charges in Indonesian Rupiah. If an older customer profile has
+        # no country, Odoo otherwise falls back to the company's US country and
+        # Xendit rejects every Indonesian channel for the IDR session.
+        if not self.partner_id.country_id and self.currency_id.name == "IDR":
+            payload["country"] = "ID"
+        # The storefront presents a single online-payment option. Let Xendit
+        # Hosted Checkout offer every channel active for this account instead
+        # of restricting the session to the Odoo method selected internally.
+        payload.pop("allowed_payment_channels", None)
         customer = payload.get("customer") or {}
         detail = customer.get("individual_detail") or {}
         if not detail.get("surname"):

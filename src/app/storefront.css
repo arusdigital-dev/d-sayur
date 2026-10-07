@@ -49,6 +49,17 @@ body{background:#e9ede2}
 .payment-instructions h2{font-size:14px;margin:0 0 6px}
 .payment-instructions p{font-size:11.5px;line-height:1.7;white-space:pre-line;margin:0;color:#6a5a25}
 .order-actions{margin-top:20px}
+.cancellation-request{margin:0 0 18px;padding:14px;border:1px solid #e4e8e2;border-radius:12px;background:#fff}
+.cancellation-request-open,.cancellation-request-submit{min-height:40px;padding:0 16px;border:1px solid #0e4c3d;border-radius:22px;background:#fff;color:#0e4c3d;font:600 13px Outfit,system-ui,sans-serif;cursor:pointer}
+.cancellation-request-submit{background:#0e4c3d;color:#fff}
+.cancellation-request-dismiss{min-height:40px;margin-left:8px;padding:0 12px;border:0;background:transparent;color:#5f6b63;font:500 13px Outfit,system-ui,sans-serif;cursor:pointer}
+.cancellation-request form label{display:grid;gap:7px;color:#45554c;font-size:12px}
+.cancellation-request textarea{min-height:76px;padding:10px;border:1px solid #dce1d7;border-radius:8px;font:inherit;resize:vertical}
+.cancellation-request form p,.cancellation-request-status p{color:#718075;font-size:12px;line-height:1.55}
+.cancellation-request-status{margin:0 0 18px;padding:14px;border:1px solid #ecd9b7;border-radius:12px;background:#fff8ec;color:#6e552e;font-size:13px}
+.cancellation-request-status p{margin:6px 0 0}
+.cancellation-request [role=alert]{display:block;margin-top:9px;color:#a44732;font-size:12px}
+.admin-cancellation-request{display:block;margin-top:5px;color:#9a4a2d;font-size:11px}
 .reorder small{display:block;color:#a44732;font-size:10px;margin-top:6px}
 
 /* Splash */
@@ -100,7 +111,7 @@ body{background:#e9ede2}
 .tier-table th,.tier-table td{padding:9px 10px;text-align:left;border-bottom:1px solid #eef0e8;vertical-align:top}
 .tier-table th{background:#f3f5ec;font-size:9px;letter-spacing:.06em;color:var(--muted)}
 .tier-table tr.me td{background:#f6f9ec;font-weight:700}
-.points-history{list-style:none;margin:0;padding:0;display:grid;gap:0;font-size:11px;background:#fff;border:1px solid #e5e8de;border-radius:10px}
+.points-history{list-style:none;margin:8px 0 20px;padding:0;display:grid;gap:0;font-size:11px;background:#fff;border:1px solid #e5e8de;border-radius:10px}
 .points-history li{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;border-bottom:1px solid #eef0e8}
 .points-history li:last-child{border:0}.points-history .plus{color:#2f7a3a}.points-history .minus{color:#a44732}
 .loyalty-summary h3{font-size:13px;margin:6px 0 0}
@@ -135,6 +146,7 @@ body{background:#e9ede2}
 .tracking-map-empty{height:100%;display:grid;align-content:center;justify-items:center;gap:8px;background:linear-gradient(135deg,#e5e5df,#d8dfd5);color:var(--green)}
 .tracking-map-empty>span{font-size:36px}.tracking-map-empty>strong{font-size:14px}.tracking-map-empty>small{font-size:11px;color:var(--muted)}
 .tracking-back,.tracking-map-link{position:absolute;top:18px;display:grid;place-items:center;width:38px;height:38px;border:0;border-radius:50%;background:#fff;color:var(--ink);box-shadow:0 2px 12px #183b2d24;text-decoration:none;font-size:25px}
+.tracking-back svg{display:block;width:18px;height:18px}
 .tracking-back{left:16px}.tracking-map-link{right:16px;font-size:16px}
 .tracking-recipient{position:absolute;right:16px;bottom:14px;left:16px;display:flex;align-items:center;gap:11px;padding:11px 13px;border-radius:15px;background:#fff;box-shadow:0 4px 18px #183b2d26}
 .tracking-recipient-icon{flex:none;width:38px;height:38px;display:grid;place-items:center;border-radius:50%;background:#e8f1e0;color:var(--green);font-size:22px}

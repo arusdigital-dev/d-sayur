@@ -12,6 +12,36 @@
             <xpath expr="//group[@name='sale_info']" position="inside">
                 <field name="dsayur_packing_started_at"/>
                 <field name="dsayur_completed_at"/>
+                <field name="dsayur_cancel_requested_at"/>
+                <field name="dsayur_cancel_reason"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="dsayur_stock_picking_cancel_info_form" model="ir.ui.view">
+        <field name="name">stock.picking.form.dsayur.cancel.info</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_dsayur_record_manual_refund" type="object" string="Catat refund manual"
+                        class="oe_highlight"
+                        confirm="Tindakan ini hanya mencatat refund di Odoo dan tidak mengirim uang. Lanjutkan hanya jika dana sudah Anda kembalikan secara manual kepada pelanggan. Untuk permintaan refund lama yang masih menunggu provider, pastikan tidak akan diproses lagi agar tidak terjadi pengembalian ganda."
+                        invisible="not sale_id or state != 'cancel' or not dsayur_cancel_requested_at or dsayur_refund_status in ('succeeded', 'manual_done')"/>
+            </xpath>
+            <xpath expr="//page[@name='extra']" position="inside">
+                <group string="Permintaan Pembatalan D-Sayur" invisible="not sale_id">
+                    <field name="dsayur_cancel_requested_at"/>
+                    <field name="dsayur_cancel_reason"/>
+                </group>
+                <group string="Refund D-Sayur" invisible="not sale_id or not dsayur_cancel_requested_at">
+                    <field name="dsayur_refund_status"/>
+                    <field name="dsayur_refund_amount_display"/>
+                    <field name="dsayur_refund_id"/>
+                    <field name="dsayur_refund_reference"/>
+                    <field name="dsayur_refund_requested_at"/>
+                    <field name="dsayur_refund_note"/>
+                </group>
             </xpath>
         </field>
     </record>

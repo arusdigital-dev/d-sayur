@@ -1,5 +1,7 @@
 from . import sale_order
+from . import stock_picking
 from . import delivery_slot
+from . import store_branch
 from . import delivery_carrier
 from . import stock_alert
 from . import res_partner

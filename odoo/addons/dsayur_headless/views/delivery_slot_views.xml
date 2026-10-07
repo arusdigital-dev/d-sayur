@@ -9,6 +9,7 @@
                 <field name="start_at"/>
                 <field name="end_at"/>
                 <field name="capacity"/>
+                <field name="branch_id"/>
                 <field name="priority_tier"/>
                 <field name="active"/>
             </list>
@@ -25,6 +26,7 @@
                         <field name="start_at"/>
                         <field name="end_at"/>
                         <field name="capacity"/>
+                        <field name="branch_id"/>
                         <field name="priority_tier"/>
                         <field name="active"/>
                     </group>

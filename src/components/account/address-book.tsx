@@ -4,9 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { storeApi } from "@/lib/store-api";
 import type { ReverseGeocodeAddress } from "@/types/store";
 
-type Address = { id: number; name: string; street: string; street2: string; city: string; zip: string; phone: string; latitude: number | null; longitude: number | null };
+type Address = { id: number; name: string; label: string; street: string; street2: string; city: string; zip: string; phone: string; latitude: number | null; longitude: number | null };
 type Form = Omit<Address, "id">;
-const blank: Form = { name: "", street: "", street2: "", city: "", zip: "", phone: "", latitude: null, longitude: null };
+const blank: Form = { name: "", label: "", street: "", street2: "", city: "", zip: "", phone: "", latitude: null, longitude: null };
 
 export function AddressBook() {
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -16,7 +16,7 @@ export function AddressBook() {
   const [pending, setPending] = useState(false);
   const load = useCallback(async () => setAddresses(await storeApi<Address[]>("addresses")), []);
   useEffect(() => { void storeApi<Address[]>("addresses").then(setAddresses).catch(() => setMessage("Alamat belum dapat dimuat.")); }, []);
-  function edit(address: Address) { setEditing(address.id); setForm({ ...address }); setMessage(""); }
+  function edit(address: Address) { setEditing(address.id); setForm({ ...address, label: "" }); setMessage(""); }
   function useLocation() {
     if (!navigator.geolocation) { setMessage("Peramban ini tidak mendukung deteksi lokasi."); return; }
     setPending(true); setMessage("Mencari alamat Anda…");
@@ -53,8 +53,8 @@ export function AddressBook() {
     <form className="address-editor" onSubmit={save}>
       <h3>{editing ? "Ubah alamat" : "Tambah alamat"}</h3>
       <button type="button" className="secondary-button location-button" disabled={pending} onClick={useLocation}>{pending ? "Mencari alamat…" : "Gunakan lokasi saya"}</button>
-      <div className="form-grid"><label>Nama penerima<input required maxLength={120} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label><label>Telepon<input type="tel" maxLength={40} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></label><label className="field-wide">Alamat lengkap<input required maxLength={250} value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} placeholder="Nama jalan dan nomor rumah" /></label><label className="field-wide">Kelurahan / patokan<input maxLength={250} value={form.street2} onChange={(e) => setForm({ ...form, street2: e.target.value })} /></label><label>Kota / kabupaten<input required maxLength={120} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></label><label>Kode pos<input required maxLength={24} value={form.zip} onChange={(e) => setForm({ ...form, zip: e.target.value })} /></label></div>
-      <button type="button" className="secondary-button" onClick={useLocation}>Gunakan lokasi saya</button><button className="secondary-button" disabled={pending}>{pending ? "Menyimpan…" : editing ? "Simpan perubahan" : "Simpan alamat"}</button>{editing && <button type="button" className="text-link" onClick={() => { setEditing(null); setForm(blank); }}>Batal</button>}
+      <div className="form-grid"><label>Nama penerima<input required maxLength={120} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label><label>Telepon<input type="tel" maxLength={40} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></label><label className="field-wide">Alamat 1<input required maxLength={250} value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} placeholder="Nama jalan dan nomor rumah" /></label><label className="field-wide">Alamat 2<input maxLength={250} value={form.street2} onChange={(e) => setForm({ ...form, street2: e.target.value })} placeholder="Apartemen, RT/RW, kelurahan, atau patokan" /></label><label>Kota / kabupaten<input required maxLength={120} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></label><label>Kode pos<input required maxLength={24} value={form.zip} onChange={(e) => setForm({ ...form, zip: e.target.value })} /></label></div>
+      <button className="secondary-button" disabled={pending}>{pending ? "Menyimpan…" : editing ? "Simpan perubahan" : "Simpan alamat"}</button>{editing && <button type="button" className="text-link" onClick={() => { setEditing(null); setForm(blank); }}>Batal</button>}
       {message && <p role="status">{message}</p>}
     </form>
   </section>;

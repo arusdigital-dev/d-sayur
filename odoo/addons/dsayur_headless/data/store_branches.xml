@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="0">
+    <record id="dsayur_branch_tpi" model="dsayur.store.branch">
+        <field name="name">D'Sayur TPI</field>
+        <field name="code">tpi</field>
+        <field name="address">Tanjung Pinang</field>
+        <field name="latitude">0.8999323</field>
+        <field name="longitude">104.4845295</field>
+        <field name="sequence">10</field>
+        <field name="active" eval="False"/>
+    </record>
+    <record id="dsayur_branch_main" model="dsayur.store.branch">
+        <field name="name">D'Sayur Bintan Center</field>
+        <field name="code">dsayur</field>
+        <field name="address">Bintan Center, Tanjung Pinang</field>
+        <field name="latitude">0.9189193</field>
+        <field name="longitude">104.505651</field>
+        <field name="sequence">20</field>
+        <field name="active" eval="True"/>
+    </record>
+    <record id="dsayur_branch_pemuda" model="dsayur.store.branch">
+        <field name="name">D'Sayur TPI Pemuda</field>
+        <field name="code">pemuda</field>
+        <field name="address">Tanjung Pinang</field>
+        <field name="latitude">0.9043553</field>
+        <field name="longitude">104.4640077</field>
+        <field name="sequence">30</field>
+        <field name="active" eval="False"/>
+    </record>
+</odoo>

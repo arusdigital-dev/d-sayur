@@ -13,7 +13,7 @@ const localImage = (url: string) => {
 };
 const mapProduct = (product: StoreProduct): StoreProduct => ({ ...product, images: product.images.map((image) => ({ ...image, url: localImage(image.url) })) });
 
-export async function getProducts(params: { search?: string; categorySlug?: string; sort?: "popular" | "price_asc" | "price_desc"; page?: number; limit?: number } = {}) {
+export async function getProducts(params: { search?: string; categorySlug?: string; sort?: "popular" | "price_asc" | "price_desc"; filter?: "offers" | "discount"; page?: number; limit?: number } = {}) {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) if (value !== undefined && value !== "") query.set(key, String(value));
   const listing = await odooData<ProductListing>(`/dsayur/api/products${query.size ? `?${query}` : ""}`);

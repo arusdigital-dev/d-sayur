@@ -12,7 +12,23 @@ class ResPartner(models.Model):
         copy=False,
         ondelete="set null",
     )
+    dsayur_address_label = fields.Char(string="Label alamat D-Sayur", copy=False)
+    dsayur_default_branch_id = fields.Many2one(
+        "dsayur.store.branch",
+        string="Cabang utama D-Sayur",
+        copy=False,
+        ondelete="set null",
+    )
+    dsayur_favorite_product_ids = fields.Many2many(
+        "product.product",
+        relation="dsayur_partner_favorite_product_rel",
+        column1="partner_id",
+        column2="product_id",
+        string="Produk favorit D-Sayur",
+        copy=False,
+    )
     dsayur_route_distance_m = fields.Integer(copy=False, readonly=True)
+    dsayur_route_duration_s = fields.Integer(copy=False, readonly=True)
     dsayur_route_checked_at = fields.Datetime(copy=False, readonly=True)
     dsayur_route_fingerprint = fields.Char(copy=False, readonly=True)
     dsayur_tier = fields.Selection(

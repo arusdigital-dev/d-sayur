@@ -23,7 +23,7 @@ DNS `dsayur.arusdigital.cloud` saat persiapan ini mengarah ke `72.61.118.220`. P
 
 1. Masuk ke Xendit Dashboard dan gunakan **Test Mode** terlebih dahulu.
 2. Buka **Settings → Developers → API Keys → Generate Secret Key**.
-3. Berikan izin minimum yang diperlukan untuk Money-in/payment. Odoo 20 memakai Secret Key; Public Key lama tidak diperlukan oleh hosted redirect flow.
+3. Berikan izin **Money-in Write** agar Odoo dapat mengirim pembayaran dan mengajukan refund. Odoo 20 memakai Secret Key; Public Key lama tidak diperlukan oleh hosted redirect flow.
 4. Buka **Settings → Webhooks**, ambil **Webhook Verification Token**, dan atur payment webhook URL ke `https://dsayur.arusdigital.cloud/payment/xendit/webhook`.
 5. Simpan Secret Key pada `deploy/secrets/xendit_secret_key` dan token pada `deploy/secrets/xendit_webhook_token`.
 

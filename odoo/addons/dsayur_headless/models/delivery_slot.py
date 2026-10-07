@@ -14,6 +14,7 @@ class DSayurDeliverySlot(models.Model):
     end_at = fields.Datetime(required=True, index=True)
     capacity = fields.Integer(required=True, default=1)
     priority_tier = fields.Selection([("all", "Semua member"), ("gold", "Prioritas Gold")], required=True, default="all")
+    branch_id = fields.Many2one("dsayur.store.branch", string="Cabang", index=True, ondelete="set null")
     active = fields.Boolean(default=True)
 
     @api.constrains("start_at", "end_at", "capacity")

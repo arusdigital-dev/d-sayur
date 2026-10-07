@@ -1,4 +1,5 @@
 import hmac
+import html
 import logging
 import math
 import re
@@ -50,6 +51,22 @@ class DSayurHeadless(http.Controller):
             "position": "before" if currency.position == "before" else "after",
         }
 
+    def _branch_payload(self, branch):
+        return {"id": branch.id, "name": branch.name, "address": branch.address, "latitude": branch.latitude, "longitude": branch.longitude}
+
+    def _home_delivery_payload(self, commercial, address, branch, branches):
+        eta = None
+        if address and address.partner_latitude and address.partner_longitude and branch:
+            carrier = request.env["delivery.carrier"].sudo().search([("delivery_type", "=", "dsayur_routes"), ("is_published", "=", True)], order="sequence, id", limit=1)
+            if carrier:
+                eta = carrier.dsayur_area_estimate(address.partner_latitude, address.partner_longitude, branch)
+        return {
+            "address": ({"id": address.id, "name": address.name or commercial.name, "label": address.dsayur_address_label or "", "street": address.street or "", "street2": address.street2 or "", "city": address.city or "", "zip": address.zip or "", "phone": address.phone or commercial.phone or "", "latitude": address.partner_latitude or None, "longitude": address.partner_longitude or None} if address else None),
+            "branch": self._branch_payload(branch) if branch else None,
+            "branches": [self._branch_payload(item) for item in branches],
+            "eta": ({"min_minutes": eta["eta_min"], "max_minutes": eta["eta_max"], "distance_km": eta["distance_km"], "deliverable": eta["deliverable"]} if eta else None),
+        }
+
     def _public_product(self, product):
         template = product.product_tmpl_id
         website = request.env.website
@@ -82,7 +99,9 @@ class DSayurHeadless(http.Controller):
                 "id": variant.id,
                 "name": variant.display_name,
                 "attributes": [{"name": line.attribute_id.name, "value": line.name} for line in variant.product_template_attribute_value_ids],
-                "price": self._money(pricelist._get_product_price(variant, 1.0) if pricelist else variant.list_price, pricelist.currency_id if pricelist else website.currency_id),
+                # Use the variant's public list price directly. The website pricelist
+                # endpoint currently collapses attribute extras for this API context.
+                "price": self._money(variant.lst_price, pricelist.currency_id if pricelist else website.currency_id),
                 "available": (not template.is_storable) or template.allow_out_of_stock_order or variant.free_qty > 0,
                 "stock_on_hand": variant.qty_available if variant.is_storable else 0,
             } for variant in template.product_variant_ids if variant.active],
@@ -98,9 +117,16 @@ class DSayurHeadless(http.Controller):
     def _cart_snapshot(self, order):
         currency = order.currency_id
         lines = []
-        for line in order.order_line.filtered(lambda item: not item.is_delivery and not item.display_type):
+        for line in order.order_line.filtered(lambda item: not item.is_delivery and not item.display_type and not item.is_reward_line):
             product = line.product_id
-            image = f"/api/odoo-image/product.template/{product.product_tmpl_id.id}/image_512"
+            template = product.product_tmpl_id
+            # Reward and retired products can remain on older carts even when
+            # their public image is no longer available. Don't emit a broken URL.
+            image = (
+                f"/api/odoo-image/product.template/{template.id}/image_512"
+                if template.is_published and template.sale_ok and template.image_512
+                else None
+            )
             lines.append({
                 "id": line.id,
                 "product": {"id": product.id, "name": product.product_tmpl_id.name, "slug": product.product_tmpl_id.website_url.rsplit("/", 1)[-1], "image": image},
@@ -127,17 +153,69 @@ class DSayurHeadless(http.Controller):
     def _cart_order(self, create=False):
         # Odoo 20 keeps the session cart on `request.cart` (lazy); `_create_cart` replaces sale_get_order(force_create).
         order = request.cart
-        if order and order.state == "draft":
+        user = request.env.user
+        partner = user.partner_id if user and not user._is_public() else request.env["res.partner"]
+        if order and order.state == "draft" and not order._is_paid():
+            if partner:
+                if order.partner_id == partner:
+                    if order.order_line.filtered(lambda line: not line.display_type and not line.is_delivery):
+                        return order
+                    # Respect an explicitly emptied cart in this account session;
+                    # do not resurrect products from an older abandoned draft.
+                    return order
+                elif order._is_anonymous_cart():
+                    order.sudo().partner_id = partner
+                    if order.order_line.filtered(lambda line: not line.display_type and not line.is_delivery):
+                        return order
+                else:
+                    # Never expose another signed-in account's session cart.
+                    request.env.website.sale_reset()
+                    order = False
+            elif order._is_anonymous_cart():
+                return order
+            else:
+                # A signed-out visitor must not inherit the last account's cart.
+                request.env.website.sale_reset()
+                order = False
+
+        if partner:
+            saved_orders = request.env["sale.order"].sudo().search([
+                ("partner_id", "=", partner.id),
+                ("website_id", "=", request.env.website.id),
+                ("state", "=", "draft"),
+            ], order="write_date desc, id desc", limit=30)
+            saved_order = next((candidate for candidate in saved_orders
+                                if not candidate._is_paid()
+                                and candidate.order_line.filtered(lambda line: not line.display_type and not line.is_delivery)), False)
+            if saved_order:
+                request.session["sale_order_id"] = saved_order.id
+                request.session["website_sale_cart_quantity"] = saved_order.cart_quantity
+                request.cart = saved_order
+                return saved_order
+
+        if order and order.state == "draft" and not order._is_paid():
             return order
         # A paid/confirmed order can remain in the browser session after a
         # redirect payment (Xendit). Do not let it block a fresh cart.
-        return request.env.website._create_cart() if create else False
+        if not create:
+            return False
+        order = request.env.website._create_cart()
+        if partner and order._is_anonymous_cart():
+            order.sudo().partner_id = partner
+        return order
 
     def _order_progress(self, order):
         if order.state == "cancel":
             return "cancelled"
         transaction = order.get_portal_last_transaction()
-        if not transaction or transaction.state != "done":
+        cash_on_delivery = bool(
+            transaction
+            and transaction.provider_id.code == "custom"
+            and transaction.provider_id.custom_mode == "cash_on_delivery"
+        )
+        # COD stays pending until the courier collects payment. That must not
+        # block fulfillment tracking once the sale order is confirmed.
+        if (not transaction or transaction.state != "done") and not cash_on_delivery:
             return "pending_payment"
         if order.dsayur_completed_at:
             return "completed"
@@ -223,6 +301,7 @@ class DSayurHeadless(http.Controller):
                     "id": provider.id,
                     "name": provider.name,
                     "code": provider.code,
+                    "custom_mode": provider.custom_mode or None,
                     "flow": "direct" if provider.code == "custom" else "redirect",
                     "methods": [{"id": method.id, "name": method.name} for method in methods],
                 })
@@ -251,15 +330,39 @@ class DSayurHeadless(http.Controller):
             page = max(1, int(request.httprequest.args.get("page", 1)))
             limit = min(48, max(1, int(request.httprequest.args.get("limit", 24))))
             sort = request.httprequest.args.get("sort", "")
+            product_filter = request.httprequest.args.get("filter", "")
             Template = request.env["product.template"].sudo()
-            if sort == "popular":
+            if product_filter == "offers":
+                domain += [("dsayur_badge", "!=", False)]
+            if product_filter == "discount":
+                candidates = Template.search(domain, limit=1000, order="website_sequence, name")
+                discounted = candidates.filtered(lambda template: bool(
+                    template.product_variant_id
+                    and request.pricelist
+                    and request.pricelist._get_product_price(template.product_variant_id, 1.0) < template.product_variant_id.lst_price
+                ))
+                if sort == "popular":
+                    discounted = discounted.sorted(lambda template: -template.sales_count)
+                elif sort == "price_desc":
+                    discounted = discounted.sorted(lambda template: -request.pricelist._get_product_price(template.product_variant_id, 1.0))
+                else:
+                    discounted = discounted.sorted(lambda template: request.pricelist._get_product_price(template.product_variant_id, 1.0))
+                total = len(discounted)
+                templates = discounted[(page - 1) * limit:page * limit]
+            elif sort == "popular":
                 # sales_count is computed (not stored), so rank the matching set in Python.
                 ranked = Template.search(domain, limit=500, order="website_sequence, name").sorted(lambda item: -item.sales_count)
                 templates = ranked[(page - 1) * limit:page * limit]
+                total = Template.search_count(domain)
             else:
                 order_by = {"price_asc": "list_price asc, name", "price_desc": "list_price desc, name"}.get(sort, "website_sequence, name")
                 templates = Template.search(domain, limit=limit, offset=(page - 1) * limit, order=order_by)
-            return self._reply({"items": [self._public_product(template.product_variant_id) for template in templates if template.product_variant_id], "page": page, "limit": limit, "total": Template.search_count(domain)})
+                total = Template.search_count(domain)
+            return self._reply({"items": [self._public_product(template.product_variant_id) for template in templates if template.product_variant_id], "page": page, "limit": limit, "total": total})
+
+        if method == "GET" and key == "branches":
+            branches = request.env["dsayur.store.branch"].sudo().search([("active", "=", True)], order="sequence, id")
+            return self._reply([self._branch_payload(branch) for branch in branches])
 
         if method == "GET" and key == "area-check":
             try:
@@ -268,11 +371,17 @@ class DSayurHeadless(http.Controller):
                     raise ValueError
             except (TypeError, ValueError):
                 return self._fail("AREA_INVALID", "Koordinat lokasi tidak valid.", 400)
+            branches = request.env["dsayur.store.branch"].sudo().search([("active", "=", True)], order="sequence, id")
+            try:
+                branch_id = int(request.httprequest.args.get("branch_id", 0))
+            except (TypeError, ValueError):
+                branch_id = 0
+            branch = branches.filtered(lambda item: item.id == branch_id)[:1] if branch_id else branches[:1]
             carrier = request.env.ref("dsayur_headless.dsayur_delivery_routes", raise_if_not_found=False)
-            estimate = carrier.sudo().dsayur_area_estimate(latitude, longitude) if carrier else None
+            estimate = carrier.sudo().dsayur_area_estimate(latitude, longitude, branch) if carrier and branch else None
             if estimate is None:
                 return self._fail("AREA_UNAVAILABLE", "Jarak belum dapat dihitung. Coba lagi nanti atau pilih ambil sendiri.", 503)
-            return self._reply({**estimate, "pickup_available": True})
+            return self._reply({**estimate, "branch": self._branch_payload(branch), "pickup_available": True})
 
         if method == "GET" and key == "reverse-geocode":
             try:
@@ -364,7 +473,7 @@ class DSayurHeadless(http.Controller):
                 Alert.create({"product_id": product.id, "email": email})
             return self._reply({"subscribed": True}, status=201)
 
-        if key.startswith("auth/") or key in ("cart", "cart/lines", "loyalty", "member", "addresses", "reorder-suggestions") or key.startswith("cart/lines/") or key.startswith("addresses/") or key.startswith("checkout") or key == "orders" or key.startswith("orders/"):
+        if key.startswith("auth/") or key in ("cart", "cart/lines", "favorites", "loyalty", "member", "addresses", "home-address", "home-branch", "reorder-suggestions") or key.startswith("cart/lines/") or key.startswith("favorites/") or key.startswith("addresses/") or key.startswith("checkout") or key == "orders" or key.startswith("orders/"):
             return self._customer_dispatch(key, method)
 
         return self._fail("NOT_FOUND", "Route tidak ditemukan.", 404)
@@ -421,7 +530,7 @@ class DSayurHeadless(http.Controller):
 
         if key == "admin/orders" and method == "GET":
             Order = request.env["sale.order"].sudo()
-            orders = Order.search([("website_id", "=", request.env.website.id), ("state", "!=", "draft")], order="date_order desc", limit=200)
+            orders = Order.search([("website_id", "=", request.env.website.id), "|", ("state", "!=", "draft"), ("dsayur_cancel_requested_at", "!=", False)], order="date_order desc", limit=200)
             result = []
             for order in orders:
                 transaction = order.get_portal_last_transaction()
@@ -436,6 +545,8 @@ class DSayurHeadless(http.Controller):
                     "total": order.amount_total,
                     "created_at": order.date_order.isoformat(),
                     "customer_name": order.partner_id.name,
+                    "cancellation_requested_at": order.dsayur_cancel_requested_at.isoformat() if order.dsayur_cancel_requested_at else None,
+                    "cancellation_reason": order.dsayur_cancel_reason or "",
                 })
             return self._reply(result)
 
@@ -521,16 +632,41 @@ class DSayurHeadless(http.Controller):
         payload = self._payload() if method in ("POST", "PATCH", "PUT") else {}
         partner = request.env.user.partner_id if request.env.user and not request.env.user._is_public() else request.env["res.partner"]
 
+        if key == "favorites" and method == "GET":
+            if not partner:
+                return self._reply([])
+            return self._reply(partner.sudo().dsayur_favorite_product_ids.ids)
+
+        if key.startswith("favorites/") and method in ("POST", "DELETE"):
+            if not partner:
+                return self._fail("AUTHENTICATION_REQUIRED", "Silakan masuk untuk menyimpan produk favorit.", 401)
+            try:
+                product_id = int(key.rsplit("/", 1)[-1])
+            except ValueError:
+                product_id = 0
+            product = request.env["product.product"].sudo().browse(product_id).exists()
+            if not product or not product.sale_ok or not product.product_tmpl_id.is_published:
+                return self._fail("PRODUCT_NOT_FOUND", "Produk tidak ditemukan.", 404)
+            command = Command.link(product.id) if method == "POST" else Command.unlink(product.id)
+            partner.sudo().write({"dsayur_favorite_product_ids": [command]})
+            return self._reply(partner.sudo().dsayur_favorite_product_ids.ids)
+
         if key == "addresses" and method == "GET":
             if not partner:
                 return self._fail("AUTHENTICATION_REQUIRED", "Silakan masuk untuk melihat alamat.", 401)
             records = partner.commercial_partner_id.child_ids.filtered(lambda item: item.active and item.type in ("delivery", "other"))
-            return self._reply([{"id": row.id, "name": row.name, "street": row.street or "", "street2": row.street2 or "", "city": row.city or "", "zip": row.zip or "", "phone": row.phone or "", "latitude": row.partner_latitude, "longitude": row.partner_longitude} for row in records])
+            return self._reply([{"id": row.id, "name": row.name, "label": row.dsayur_address_label or "", "street": row.street or "", "street2": row.street2 or "", "city": row.city or "", "zip": row.zip or "", "phone": row.phone or "", "latitude": row.partner_latitude, "longitude": row.partner_longitude} for row in records])
 
         if key == "home-address" and method == "GET":
             if not partner:
-                return self._reply({"address": None})
+                return self._reply({"address": None, "branch": None, "branches": [], "eta": None})
             commercial = partner.commercial_partner_id
+            branches = request.env["dsayur.store.branch"].sudo().search([("active", "=", True)], order="sequence, id")
+            branch = commercial.dsayur_default_branch_id
+            if branch not in branches:
+                branch = branches[:1]
+                if branch:
+                    commercial.sudo().write({"dsayur_default_branch_id": branch.id})
             addresses = commercial.child_ids.filtered(lambda item: item.active and item.type in ("delivery", "other"))
             if commercial.contact_address:
                 addresses |= commercial
@@ -541,7 +677,43 @@ class DSayurHeadless(http.Controller):
                 address = order.partner_shipping_id if order and order.partner_shipping_id in addresses else addresses[:1]
             if address and commercial.dsayur_default_delivery_address_id != address:
                 commercial.sudo().write({"dsayur_default_delivery_address_id": address.id})
-            return self._reply({"address": ({"id": address.id, "name": address.name or commercial.name, "street": address.street or "", "street2": address.street2 or "", "city": address.city or "", "zip": address.zip or "", "phone": address.phone or commercial.phone or ""} if address else None)})
+            order = self._cart_order()
+            if order and branch and order.dsayur_branch_id != branch:
+                order.sudo().write({"dsayur_branch_id": branch.id})
+            return self._reply(self._home_delivery_payload(commercial, address, branch, branches))
+
+        if key == "home-branch" and method == "POST":
+            if not partner:
+                return self._fail("AUTHENTICATION_REQUIRED", "Silakan masuk untuk memilih cabang.", 401)
+            try:
+                branch_id = int(payload.get("branch_id", 0))
+            except (TypeError, ValueError):
+                branch_id = 0
+            branches = request.env["dsayur.store.branch"].sudo().search([("active", "=", True)], order="sequence, id")
+            branch = branches.filtered(lambda item: item.id == branch_id)[:1]
+            if not branch:
+                return self._fail("BRANCH_NOT_FOUND", "Cabang tidak ditemukan atau sedang tidak tersedia.", 404)
+            commercial = partner.commercial_partner_id
+            commercial.sudo().write({"dsayur_default_branch_id": branch.id})
+            order = self._cart_order()
+            if order:
+                order.sudo().write({"dsayur_branch_id": branch.id})
+                if order.dsayur_delivery_slot_id:
+                    order.sudo().write({"dsayur_delivery_slot_id": False, "dsayur_delivery_slot_reserved_at": False})
+                if order.carrier_id:
+                    rate = order.carrier_id.rate_shipment(order)
+                    if rate.get("success"):
+                        order._set_delivery_method(order.carrier_id)
+                    else:
+                        order.order_line.filtered("is_delivery").sudo().unlink()
+                        order.sudo().write({"carrier_id": False})
+            address = commercial.dsayur_default_delivery_address_id
+            valid_addresses = commercial.child_ids.filtered(lambda item: item.active and item.type in ("delivery", "other"))
+            if address not in valid_addresses and commercial.contact_address:
+                address = commercial
+            if address not in valid_addresses and not commercial.contact_address:
+                address = valid_addresses.sorted("id")[:1]
+            return self._reply(self._home_delivery_payload(commercial, address, branch, branches))
 
         if key == "addresses" and method == "POST":
             if not partner:
@@ -556,9 +728,9 @@ class DSayurHeadless(http.Controller):
             except (TypeError, ValueError):
                 return self._fail("ADDRESS_PIN_REQUIRED", "Tandai pin lokasi alamat yang valid.", 400)
             country = request.env["res.country"].sudo().search([("code", "=", "ID")], limit=1)
-            address = request.env["res.partner"].sudo().create({"parent_id": partner.commercial_partner_id.id, "type": "delivery", "name": name[:120], "street": street[:250], "street2": (payload.get("street2") or "").strip()[:250], "city": city[:120], "zip": zip_code[:24], "phone": (payload.get("phone") or "").strip()[:40], "country_id": country.id, "partner_latitude": latitude, "partner_longitude": longitude})
+            address = request.env["res.partner"].sudo().create({"parent_id": partner.commercial_partner_id.id, "type": "delivery", "name": name[:120], "dsayur_address_label": (payload.get("label") or "").strip()[:80], "street": street[:250], "street2": (payload.get("street2") or "").strip()[:250], "city": city[:120], "zip": zip_code[:24], "phone": (payload.get("phone") or "").strip()[:40], "country_id": country.id, "partner_latitude": latitude, "partner_longitude": longitude})
             partner.commercial_partner_id.sudo().write({"dsayur_default_delivery_address_id": address.id})
-            return self._reply({"id": address.id, "name": address.name, "street": address.street, "street2": address.street2 or "", "city": address.city, "zip": address.zip, "phone": address.phone or "", "latitude": latitude, "longitude": longitude}, status=201)
+            return self._reply({"id": address.id, "name": address.name, "label": address.dsayur_address_label or "", "street": address.street, "street2": address.street2 or "", "city": address.city, "zip": address.zip, "phone": address.phone or "", "latitude": latitude, "longitude": longitude}, status=201)
 
         if key.startswith("addresses/"):
             if not partner:
@@ -571,6 +743,9 @@ class DSayurHeadless(http.Controller):
             address = request.env["res.partner"].sudo().search([("id", "=", address_id), ("id", "in", allowed_ids), ("type", "in", ["delivery", "other"]), ("active", "=", True)], limit=1)
             if not address:
                 return self._fail("ADDRESS_NOT_FOUND", "Alamat tidak ditemukan.", 404)
+            if key.endswith("/default") and method == "POST":
+                partner.commercial_partner_id.sudo().write({"dsayur_default_delivery_address_id": address.id})
+                return self._reply({"id": address.id, "name": address.name, "street": address.street or "", "street2": address.street2 or "", "city": address.city or "", "zip": address.zip or "", "phone": address.phone or ""})
             if method == "DELETE":
                 address.active = False
                 commercial = partner.commercial_partner_id
@@ -580,7 +755,7 @@ class DSayurHeadless(http.Controller):
                 return self._reply({"deleted": True})
             if method == "PATCH":
                 values = {}
-                for key_name, field_name, limit in (("name", "name", 120), ("street", "street", 250), ("street2", "street2", 250), ("city", "city", 120), ("zip", "zip", 24), ("phone", "phone", 40)):
+                for key_name, field_name, limit in (("name", "name", 120), ("label", "dsayur_address_label", 80), ("street", "street", 250), ("street2", "street2", 250), ("city", "city", 120), ("zip", "zip", 24), ("phone", "phone", 40)):
                     if key_name in payload:
                         value = payload[key_name]
                         if not isinstance(value, str) or (key_name in ("name", "street", "city", "zip") and not value.strip()):
@@ -596,7 +771,7 @@ class DSayurHeadless(http.Controller):
                         return self._fail("ADDRESS_PIN_REQUIRED", "Koordinat pin tidak valid.", 400)
                     values.update({"partner_latitude": latitude, "partner_longitude": longitude})
                 address.write(values)
-                return self._reply({"id": address.id, "name": address.name, "street": address.street, "street2": address.street2 or "", "city": address.city, "zip": address.zip, "phone": address.phone or "", "latitude": address.partner_latitude, "longitude": address.partner_longitude})
+                return self._reply({"id": address.id, "name": address.name, "label": address.dsayur_address_label or "", "street": address.street, "street2": address.street2 or "", "city": address.city, "zip": address.zip, "phone": address.phone or "", "latitude": address.partner_latitude, "longitude": address.partner_longitude})
             return self._fail("METHOD_NOT_ALLOWED", "Metode alamat tidak didukung.", 405)
 
         if key == "auth/me" and method == "GET":
@@ -741,8 +916,44 @@ class DSayurHeadless(http.Controller):
             if not partner:
                 return self._fail("AUTHENTICATION_REQUIRED", "Silakan masuk ke akun.", 401)
             partner_ids = partner.commercial_partner_id | partner.commercial_partner_id.child_ids
-            orders = request.env["sale.order"].sudo().search([("partner_id", "in", partner_ids.ids), ("website_id", "=", request.env.website.id), ("state", "!=", "draft")], order="date_order desc", limit=100)
-            return self._reply([{"id": order.id, "name": order.name, "date": order.date_order.isoformat(), "status": order.state, "progress_status": self._order_progress(order), "total": self._money(order.amount_total, order.currency_id)} for order in orders])
+            # A successful Xendit callback can mark the transaction done just before
+            # Odoo's payment post-processing confirms the quotation. Include that
+            # short-lived state so a paid order never disappears from order history.
+            orders = request.env["sale.order"].sudo().search([
+                ("partner_id", "in", partner_ids.ids),
+                ("website_id", "=", request.env.website.id),
+                "|", ("state", "!=", "draft"), ("transaction_ids.state", "=", "done"),
+            ], order="date_order desc, id desc", limit=100)
+            summaries = []
+            for order in orders:
+                transaction = order.get_portal_last_transaction()
+                status = "Dibayar · menunggu diproses" if order.state == "draft" and transaction and transaction.state == "done" else order.state
+                summaries.append({"id": order.id, "name": order.name, "date": order.date_order.isoformat(), "status": status, "progress_status": self._order_progress(order), "total": self._money(order.amount_total, order.currency_id)})
+            return self._reply(summaries)
+
+        if key.startswith("orders/") and key.endswith("/cancel") and method == "POST":
+            if not partner:
+                return self._fail("AUTHENTICATION_REQUIRED", "Silakan masuk ke akun.", 401)
+            try:
+                order_id = int(key.split("/")[1])
+            except (IndexError, ValueError):
+                order_id = 0
+            allowed_partners = partner.commercial_partner_id | partner.commercial_partner_id.child_ids
+            order = request.env["sale.order"].sudo().search([("id", "=", order_id), ("partner_id", "in", allowed_partners.ids), ("website_id", "=", request.env.website.id)], limit=1)
+            if not order:
+                return self._fail("ORDER_NOT_FOUND", "Pesanan tidak ditemukan.", 404)
+            progress = self._order_progress(order)
+            if progress not in ("pending_payment", "paid"):
+                return self._fail("CANCELLATION_CLOSED", "Permintaan pembatalan hanya tersedia sebelum pesanan mulai disiapkan.", 409)
+            if order.dsayur_cancel_requested_at:
+                return self._fail("CANCELLATION_ALREADY_REQUESTED", "Permintaan pembatalan pesanan ini sudah tercatat.", 409)
+            reason = self._payload().get("reason") or ""
+            if not isinstance(reason, str):
+                return self._fail("CANCELLATION_INVALID", "Alasan pembatalan tidak valid.", 400)
+            reason = reason.strip()[:500]
+            order.sudo().write({"dsayur_cancel_requested_at": fields.Datetime.now(), "dsayur_cancel_reason": reason})
+            order.sudo().message_post(body="Permintaan pembatalan dari pelanggan.<br/>Alasan: %s" % html.escape(reason or "Tidak dicantumkan"))
+            return self._reply({"cancellation_requested": True, "cancellation_requested_at": order.dsayur_cancel_requested_at.isoformat()})
 
         if key.startswith("orders/") and key.endswith("/received") and method == "POST":
             if not partner:
@@ -772,12 +983,30 @@ class DSayurHeadless(http.Controller):
                 return self._fail("ORDER_NOT_FOUND", "Pesanan tidak ditemukan.", 404)
             transaction = order.get_portal_last_transaction()
             pickings = order.picking_ids.filtered(lambda picking: picking.picking_type_code == "outgoing")
+            cancellation_status = False
+            if order.dsayur_cancel_requested_at:
+                refund_due = bool(transaction and transaction.state == "done") and (
+                    order.state == "cancel" or bool(pickings and all(picking.state == "cancel" for picking in pickings))
+                )
+                if refund_due:
+                    cancellation_status = {
+                        "succeeded": "refunded",
+                        "manual_done": "manual_refunded",
+                        "failed": "refund_failed",
+                        "unknown": "refund_review",
+                    }.get(order.dsayur_refund_status, "refund_pending")
+                else:
+                    cancellation_status = "cancelled" if order.state == "cancel" else "review"
             return self._reply({
                 "id": order.id,
                 "name": order.name,
                 "date": order.date_order.isoformat(),
                 "status": order.state,
                 "progress_status": self._order_progress(order),
+                "cancellation_requested": bool(order.dsayur_cancel_requested_at),
+                "cancellation_reason": order.dsayur_cancel_reason or "",
+                "cancellation_status": cancellation_status,
+                "can_request_cancellation": self._order_progress(order) in ("pending_payment", "paid") and not order.dsayur_cancel_requested_at,
                 "can_confirm_received": self._order_progress(order) == "delivered",
                 "payment_status": transaction.state if transaction else "no_transaction",
                 "payment_method": transaction.provider_id.name if transaction else "",
@@ -883,7 +1112,13 @@ class DSayurHeadless(http.Controller):
                         "sale_order_ids": [Command.set([order.id])],
                     })
                     transaction._log_sent_message()
-                    if provider.code == "custom":
+                    if provider.code == "custom" and provider.custom_mode == "cash_on_delivery":
+                        # Odoo 20 protects transaction state changes; route this through
+                        # the provider's normal notification processing instead.
+                        transaction._record({"reference": transaction.reference})
+                        order.action_confirm()
+                        redirect_url = None
+                    elif provider.code == "custom":
                         transaction._record({"reference": transaction.reference})
                         redirect_url = None
                     else:
@@ -898,6 +1133,12 @@ class DSayurHeadless(http.Controller):
                 detail = str(error)
                 if "HTTPS" in detail or "INVALID_URL" in detail:
                     return self._fail("PAYMENT_NEEDS_HTTPS", "Xendit hanya menerima alamat HTTPS publik. Atur System Parameter web.base.url Odoo ke URL HTTPS (misalnya lewat tunnel) agar pembayaran Xendit bisa dimulai.", 409)
+                if (
+                    "INVALID_PAYMENT_CHANNEL" in detail
+                    or "no available channels" in detail.lower()
+                    or "are not available" in detail.lower()
+                ):
+                    return self._fail("PAYMENT_CHANNEL_UNAVAILABLE", "Kanal pembayaran belum aktif pada akun pembayaran toko. Silakan coba lagi atau hubungi pengelola toko.", 409)
                 return self._fail("PAYMENT_START_FAILED", "Pembayaran belum dapat dimulai. Coba kanal lain atau ulangi sebentar lagi.", 409)
             if provider.code == "custom":
                 request.env.website.sale_reset()
@@ -945,17 +1186,26 @@ class DSayurHeadless(http.Controller):
                 return self._fail("AUTHENTICATION_REQUIRED", "Silakan masuk untuk melanjutkan checkout.", 401)
             order = self._cart_order(create=True)
             commercial = partner.commercial_partner_id
+            branches = request.env["dsayur.store.branch"].sudo().search([("active", "=", True)], order="sequence, id")
+            branch = commercial.dsayur_default_branch_id
+            if branch not in branches:
+                branch = branches[:1]
+                if branch:
+                    commercial.sudo().write({"dsayur_default_branch_id": branch.id})
+            if branch and order.dsayur_branch_id != branch:
+                order.sudo().write({"dsayur_branch_id": branch.id})
             addresses = commercial.child_ids.filtered(lambda row: row.type in ("delivery", "other"))
             if commercial.contact_address:
                 addresses |= commercial
             addresses = addresses.sorted("id")
             default_address = commercial.dsayur_default_delivery_address_id
             if default_address not in addresses:
-                default_address = order.partner_shipping_id if order.partner_shipping_id in addresses else addresses[:1]
-            if default_address and commercial.dsayur_default_delivery_address_id != default_address:
+                default_address = addresses[:1]
+            if not order.dsayur_is_gift and default_address and commercial.dsayur_default_delivery_address_id != default_address:
                 commercial.sudo().write({"dsayur_default_delivery_address_id": default_address.id})
-            if default_address and order.partner_shipping_id != default_address:
+            if not order.dsayur_is_gift and default_address and order.partner_shipping_id != default_address:
                 order._update_address(default_address.id, ["partner_shipping_id"])
+            selected_address = order.partner_shipping_id if order.dsayur_is_gift and order.partner_shipping_id in addresses else default_address
             countries = request.env["res.country"].sudo().search_read([("code", "=", "ID")], ["id", "name", "code"], limit=1)
             loyalty_program = request.env.ref("dsayur_headless.dsayur_loyalty_program", raise_if_not_found=False)
             loyalty_cards = request.env["loyalty.card"].sudo().search([("program_id", "=", loyalty_program.id), ("partner_id", "in", (partner.commercial_partner_id | partner.commercial_partner_id.child_ids).ids), ("active", "=", True)]) if loyalty_program else request.env["loyalty.card"]
@@ -976,20 +1226,27 @@ class DSayurHeadless(http.Controller):
                     "requires_slot": carrier.delivery_type == "dsayur_routes",
                 })
             member_tier = partner.commercial_partner_id.dsayur_tier or "bronze"
-            slots = request.env["dsayur.delivery.slot"].sudo().search([("active", "=", True), ("start_at", ">", fields.Datetime.now())], order="start_at", limit=80)
+            slots = request.env["dsayur.delivery.slot"].sudo().search([("active", "=", True), ("start_at", ">", fields.Datetime.now()), "|", ("branch_id", "=", False), ("branch_id", "=", branch.id if branch else 0)], order="start_at", limit=80)
             slots = slots.filtered(lambda slot: slot.priority_tier == "all" or member_tier == "gold")
+            route_carrier = request.env["delivery.carrier"].sudo().search([("delivery_type", "=", "dsayur_routes")], limit=1)
+            branch_eta = route_carrier.dsayur_area_estimate(order.partner_shipping_id.partner_latitude, order.partner_shipping_id.partner_longitude, branch) if route_carrier and branch and order.partner_shipping_id.partner_latitude and order.partner_shipping_id.partner_longitude else None
             return self._reply({
                 "cart": self._cart_snapshot(order),
-                "default_address_id": default_address.id or None,
+                "default_address_id": selected_address.id or None,
                 "substitution_policy": order.dsayur_substitution_policy or "contact_first",
                 "substitution_note": order.dsayur_substitution_note or "",
                 "is_gift": order.dsayur_is_gift,
                 "stock_issues": self._checkout_stock_issues(order),
                 "loyalty_cards": [{"id": card.id, "points": card.points} for card in loyalty_cards if card.points >= 1],
+                "redeemed_points_card_id": next((line.coupon_id.id for line in order.order_line if line.coupon_id and line.coupon_id.program_id == loyalty_program and line.reward_id and line.reward_id.discount_mode == "per_point"), None),
+                "redeemed_points_discount": (self._money(sum(abs(line.price_total) for line in order.order_line if line.coupon_id and line.coupon_id.program_id == loyalty_program and line.reward_id and line.reward_id.discount_mode == "per_point"), order.currency_id) if any(line.coupon_id and line.coupon_id.program_id == loyalty_program and line.reward_id and line.reward_id.discount_mode == "per_point" for line in order.order_line) else None),
                 "vouchers": [{"id": card.id, "name": card.program_id.name, "value": card.program_id.reward_ids[:1].discount} for card in vouchers if not card.expiration_date or card.expiration_date >= fields.Date.context_today(request.env.user.with_context(tz="Asia/Jakarta"))],
-                "addresses": [{"id": row.id, "name": row.name or partner.name, "street": row.street or "", "street2": row.street2 or "", "city": row.city or "", "zip": row.zip or "", "phone": row.phone or partner.phone or "", "country_id": row.country_id.id, "country": row.country_id.name, "state_id": row.state_id.id or False, "latitude": row.partner_latitude, "longitude": row.partner_longitude} for row in addresses],
+                "addresses": [{"id": row.id, "name": row.name or partner.name, "label": row.dsayur_address_label or "", "street": row.street or "", "street2": row.street2 or "", "city": row.city or "", "zip": row.zip or "", "phone": row.phone or partner.phone or "", "country_id": row.country_id.id, "country": row.country_id.name, "state_id": row.state_id.id or False, "latitude": row.partner_latitude, "longitude": row.partner_longitude} for row in addresses],
                 "delivery_methods": delivery_methods,
-                "delivery_slots": [{"id": slot.id, "name": slot.name, "start_at": fields.Datetime.to_string(slot.start_at), "end_at": fields.Datetime.to_string(slot.end_at), "remaining": max(0, slot.capacity - request.env["sale.order"].sudo().search_count(slot._active_order_domain(order.id))), "priority_tier": slot.priority_tier} for slot in slots if request.env["sale.order"].sudo().search_count(slot._active_order_domain(order.id)) < slot.capacity],
+                "branch": self._branch_payload(branch) if branch else None,
+                "branches": [self._branch_payload(item) for item in branches],
+                "eta": ({"min_minutes": branch_eta["eta_min"], "max_minutes": branch_eta["eta_max"], "distance_km": branch_eta["distance_km"]} if branch_eta else None),
+                "delivery_slots": [{"id": slot.id, "name": slot.name, "start_at": fields.Datetime.to_string(slot.start_at), "end_at": fields.Datetime.to_string(slot.end_at), "remaining": max(0, slot.capacity - request.env["sale.order"].sudo().search_count(slot._active_order_domain(order.id))), "priority_tier": slot.priority_tier, "branch_id": slot.branch_id.id or None} for slot in slots if request.env["sale.order"].sudo().search_count(slot._active_order_domain(order.id)) < slot.capacity],
                 "countries": countries,
             })
 
@@ -1055,6 +1312,9 @@ class DSayurHeadless(http.Controller):
             order = self._cart_order()
             if not order or order.partner_id.commercial_partner_id != partner.commercial_partner_id:
                 return self._fail("CART_NOT_FOUND", "Keranjang aktif tidak ditemukan.", 404)
+            action = payload.get("action", "apply")
+            if action not in ("apply", "remove"):
+                return self._fail("LOYALTY_ACTION_INVALID", "Tindakan poin tidak valid.", 400)
             try:
                 card_id = int(payload.get("card_id", 0))
             except (TypeError, ValueError):
@@ -1062,8 +1322,17 @@ class DSayurHeadless(http.Controller):
             member = partner.commercial_partner_id
             program = request.env.ref("dsayur_headless.dsayur_loyalty_program", raise_if_not_found=False)
             card = request.env["loyalty.card"].sudo().search([("id", "=", card_id), ("program_id", "=", program.id if program else 0), ("partner_id", "in", (member | member.child_ids).ids), ("active", "=", True)], limit=1)
-            if not card or card.points < 1:
+            if not card or (action == "apply" and card.points < 1):
                 return self._fail("LOYALTY_CARD_INVALID", "Kartu poin tidak tersedia atau saldonya belum cukup.", 400)
+            if action == "remove":
+                reward_lines = order.order_line.filtered(lambda line: line.coupon_id == card and line.reward_id and line.reward_id.discount_mode == "per_point")
+                if not reward_lines:
+                    return self._fail("LOYALTY_NOT_APPLIED", "Penukaran poin tidak ditemukan pada pesanan ini.", 409)
+                reward_lines.unlink()
+                if card in order.applied_coupon_ids:
+                    order.applied_coupon_ids -= card
+                order._update_programs_and_rewards()
+                return self._reply({"cart": self._cart_snapshot(order), "redeemed_points_card_id": None})
             if order.order_line.filtered(lambda line: line.coupon_id == card):
                 return self._fail("LOYALTY_ALREADY_APPLIED", "Kartu poin sudah diterapkan pada pesanan ini.", 409)
             reward = card.program_id.reward_ids.filtered(lambda item: item.reward_type == "discount" and item.discount_mode == "per_point")[:1]
@@ -1128,8 +1397,11 @@ class DSayurHeadless(http.Controller):
             try:
                 status = order._try_apply_code(code.strip())
                 if not status or status.get("error"):
+                    loyalty_card = request.env["loyalty.card"].sudo().search([("code", "=", code.strip())], limit=1)
                     request.env.cr.rollback()
-                    return self._fail("PROMO_NOT_APPLICABLE", "Kode promo tidak berlaku untuk akun atau keranjang ini.", 409)
+                    if loyalty_card and loyalty_card.program_id.program_type == "loyalty":
+                        return self._reply({"applied": False, "message": "Kode ini adalah kartu D-Sayur Member Rewards untuk mengumpulkan poin, bukan kupon diskon. Untuk menukar poin, gunakan tombol Pakai poin."})
+                    return self._reply({"applied": False, "message": "Kode promo tidak berlaku untuk akun atau keranjang ini. Periksa kode dan syarat minimum belanja."})
                 coupons = request.env["loyalty.card"]
                 rewards = request.env["loyalty.reward"]
                 for coupon, available_rewards in status.items():
@@ -1137,17 +1409,17 @@ class DSayurHeadless(http.Controller):
                     rewards |= available_rewards
                 if len(coupons) != 1 or len(rewards) != 1:
                     request.env.cr.rollback()
-                    return self._fail("PROMO_REWARD_SELECTION_REQUIRED", "Promo ini memiliki beberapa hadiah; pilih promo dengan satu hadiah untuk checkout.", 409)
+                    return self._reply({"applied": False, "message": "Promo ini memiliki beberapa hadiah dan belum bisa dipilih otomatis. Gunakan kode promo lain."})
                 result = order._apply_program_reward(rewards, coupons)
                 if result.get("error"):
                     request.env.cr.rollback()
-                    return self._fail("PROMO_NOT_APPLICABLE", "Kode promo belum memenuhi syarat minimum pesanan.", 409)
+                    return self._reply({"applied": False, "message": "Kode promo belum memenuhi syarat minimum pesanan."})
                 order._update_programs_and_rewards()
             except Exception:
                 request.env.cr.rollback()
                 _logger.info("Odoo native promo code failed order=%s", order.id, exc_info=True)
-                return self._fail("PROMO_NOT_APPLICABLE", "Kode promo tidak dapat diterapkan saat ini.", 409)
-            return self._reply(self._cart_snapshot(order))
+                return self._reply({"applied": False, "message": "Kode promo tidak dapat diterapkan saat ini. Silakan coba lagi."})
+            return self._reply({"applied": True, "message": "Kode promo berhasil diterapkan. Total pesanan sudah diperbarui.", "cart": self._cart_snapshot(order)})
 
         if key == "checkout/substitutions" and method == "POST":
             if not partner:
@@ -1226,7 +1498,7 @@ class DSayurHeadless(http.Controller):
                     return self._fail("ADDRESS_PIN_REQUIRED", "Tandai pin lokasi alamat yang valid sebelum menyimpan.", 400)
                 latitude = longitude = None
             if address_id:
-                values = {"name": name, "street": street, "street2": (payload.get("street2") or "").strip(), "city": city, "zip": zip_code, "phone": (payload.get("phone") or "").strip()}
+                values = {"name": name, "dsayur_address_label": (payload.get("label") or "").strip()[:80], "street": street, "street2": (payload.get("street2") or "").strip(), "city": city, "zip": zip_code, "phone": (payload.get("phone") or "").strip()}
                 if latitude is not None and longitude is not None:
                     values.update({"partner_latitude": latitude, "partner_longitude": longitude})
                 address.write(values)
@@ -1238,6 +1510,7 @@ class DSayurHeadless(http.Controller):
                     "parent_id": commercial.id,
                     "type": "delivery",
                     "name": name,
+                    "dsayur_address_label": (payload.get("label") or "").strip()[:80],
                     "street": street,
                     "street2": (payload.get("street2") or "").strip(),
                     "city": city,
@@ -1254,7 +1527,8 @@ class DSayurHeadless(http.Controller):
             if not order:
                 return self._fail("CART_EMPTY", "Keranjang tidak tersedia.", 400)
             order._update_address(address.id, ["partner_shipping_id"])
-            commercial.sudo().write({"dsayur_default_delivery_address_id": address.id})
+            if not order.dsayur_is_gift:
+                commercial.sudo().write({"dsayur_default_delivery_address_id": address.id})
             return self._reply({"address_id": address.id})
 
         if key == "checkout/delivery" and method == "POST":
@@ -1274,7 +1548,7 @@ class DSayurHeadless(http.Controller):
             slot = request.env["dsayur.delivery.slot"]
             if carrier.delivery_type == "dsayur_routes":
                 slot = slot.sudo().browse(slot_id).exists()
-                if not slot or not slot.reserve_for_order(order, partner.commercial_partner_id.dsayur_tier or "bronze"):
+                if not slot or (slot.branch_id and slot.branch_id != order.dsayur_branch_id) or not slot.reserve_for_order(order, partner.commercial_partner_id.dsayur_tier or "bronze"):
                     return self._fail("DELIVERY_SLOT_UNAVAILABLE", "Slot tersebut sudah penuh atau tidak tersedia. Pilih slot lain.", 409)
             elif order.dsayur_delivery_slot_id:
                 order.sudo().write({"dsayur_delivery_slot_id": False, "dsayur_delivery_slot_reserved_at": False})

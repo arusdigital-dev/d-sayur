@@ -10,8 +10,36 @@ class SaleOrder(models.Model):
 
     dsayur_delivery_slot_id = fields.Many2one("dsayur.delivery.slot", copy=False, index=True)
     dsayur_delivery_slot_reserved_at = fields.Datetime(copy=False, index=True)
+    dsayur_branch_id = fields.Many2one("dsayur.store.branch", string="Cabang pengiriman", copy=False, index=True)
     dsayur_completed_at = fields.Datetime(copy=False, readonly=True, index=True)
     dsayur_packing_started_at = fields.Datetime(string="Mulai packing", copy=False, readonly=True, index=True)
+    dsayur_cancel_requested_at = fields.Datetime(string="Permintaan pembatalan", copy=False, readonly=True, index=True)
+    dsayur_cancel_reason = fields.Char(string="Alasan pembatalan pelanggan", size=500, copy=False, readonly=True)
+    dsayur_refund_status = fields.Selection(
+        selection=[
+            ("none", "Belum diproses"),
+            ("pending", "Menunggu proses refund"),
+            ("succeeded", "Refund berhasil"),
+            ("manual_done", "Refund dicatat manual di Odoo"),
+            ("failed", "Refund gagal"),
+            ("unknown", "Perlu pemeriksaan manual"),
+        ],
+        string="Status refund D-Sayur",
+        default="none",
+        copy=False,
+        readonly=True,
+        index=True,
+    )
+    dsayur_refund_id = fields.Char(string="ID refund Xendit", copy=False, readonly=True)
+    dsayur_refund_reference = fields.Char(string="Referensi refund", copy=False, readonly=True)
+    dsayur_refund_amount = fields.Monetary(
+        string="Jumlah refund",
+        currency_field="currency_id",
+        copy=False,
+        readonly=True,
+    )
+    dsayur_refund_requested_at = fields.Datetime(string="Refund diminta pada", copy=False, readonly=True)
+    dsayur_refund_note = fields.Char(string="Catatan refund", size=500, copy=False, readonly=True)
 
     def _dsayur_eligible_tiers(self):
         self.ensure_one()
@@ -90,9 +118,24 @@ class SaleOrder(models.Model):
         self.ensure_one()
         if self.state not in ("sale", "done") or self.carrier_id.dsayur_is_pickup:
             return False
+        if self.dsayur_completed_at:
+            return True
         outgoing = self.picking_ids.filtered(lambda picking: picking.picking_type_code == "outgoing")
         transaction = self.get_portal_last_transaction()
-        if not outgoing or any(picking.state != "done" for picking in outgoing) or not transaction or transaction.state != "done":
+        if not outgoing or any(picking.state != "done" for picking in outgoing) or not transaction:
+            return False
+        cash_on_delivery = (
+            transaction.provider_id.code == "custom"
+            and transaction.provider_id.custom_mode == "cash_on_delivery"
+        )
+        if cash_on_delivery and transaction.state == "pending":
+            # Customer confirmation means the courier handed over the goods and
+            # collected the COD amount. Odoo processes _record asynchronously,
+            # so do not wait for the transaction state to change in this request.
+            transaction._record({"reference": transaction.reference, "confirmed": True})
+            self.sudo().write({"dsayur_completed_at": fields.Datetime.now()})
+            return True
+        elif transaction.state != "done":
             return False
         self.sudo().write({"dsayur_completed_at": fields.Datetime.now()})
         return True
