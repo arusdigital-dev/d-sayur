@@ -5,7 +5,6 @@ import "./storefront.css";
 import "./figma-storefront.css";
 import { SiteFooter, SiteHeader } from "@/components/layout/site-header";
 import { BottomNav } from "@/components/layout/bottom-nav";
-import { Splash } from "@/components/layout/splash";
 
 export const viewport: Viewport = { themeColor: "#0E4C3D", width: "device-width", initialScale: 1 };
 
@@ -29,7 +28,8 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="id" data-scroll-behavior="smooth" className="h-full antialiased">
-      <body className="min-h-full flex flex-col"><div className="app-shell"><SiteHeader />{children}<SiteFooter /><BottomNav /><Splash /></div></body>
+      <head><link rel="stylesheet" href="/promo-carousel-desktop-20261008.css" /></head>
+      <body className="min-h-full flex flex-col"><div className="app-shell"><SiteHeader />{children}<SiteFooter /><BottomNav /></div></body>
     </html>
   );
 }

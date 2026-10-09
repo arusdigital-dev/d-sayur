@@ -18,5 +18,13 @@ http://{$DOMAIN} {
 
 http://{$ODOO_DOMAIN} {
     encode zstd gzip
-    reverse_proxy odoo:8069
+
+    # Odoo's evented worker handles browser WebSocket connections separately.
+    handle /websocket* {
+        reverse_proxy odoo:8072
+    }
+
+    handle {
+        reverse_proxy odoo:8069
+    }
 }

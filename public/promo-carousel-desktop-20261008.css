@@ -1,0 +1,19 @@
+/* Cache-busted desktop carousel sizing: keep the center slide wide. */
+@media (min-width: 701px) {
+  .app-shell .ds-home .ds-promo {
+    display: flex !important;
+    width: 100% !important;
+    max-width: none !important;
+    gap: 12px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+  }
+
+  .app-shell .ds-home .ds-promo > .ds-promo-card {
+    box-sizing: border-box !important;
+    flex: 0 0 338px !important;
+    width: 338px !important;
+    min-width: 338px !important;
+    max-width: 338px !important;
+  }
+}

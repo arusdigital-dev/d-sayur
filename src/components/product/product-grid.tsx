@@ -23,7 +23,7 @@ function stockDisplay(product: StoreProduct) {
   return { inStock: false, label: product.available ? "Pre-order" : "Stok habis" };
 }
 
-export function ProductGrid({ products }: { products: StoreProduct[] }) {
+export function ProductGrid({ products, returnTo = "/products" }: { products: StoreProduct[]; returnTo?: string }) {
   const [favorites, setFavorites] = useState<number[]>([]);
   const [loggedIn, setLoggedIn] = useState(false);
   const [favoritesReady, setFavoritesReady] = useState(false);
@@ -88,9 +88,10 @@ export function ProductGrid({ products }: { products: StoreProduct[] }) {
 
   return <div className="product-grid">{products.map((product) => {
       const stock = stockDisplay(product);
+      const detailHref = `/products/${product.slug}?returnTo=${encodeURIComponent(returnTo)}`;
       return <article className="product-card" key={product.id}>
-      <div className="product-media"><Link href={`/products/${product.slug}`} className="product-image"><Image unoptimized fill sizes="(max-width: 560px) 45vw, (max-width: 850px) 42vw, 24vw" src={storefrontProductPhoto(product)} alt={product.images[0]?.alt ?? product.name} /><BadgeLabel product={product} /></Link><button type="button" className={`product-favorite${favorites.includes(product.id) ? " is-favorite" : ""}`} aria-label={favorites.includes(product.id) ? `Hapus ${product.name} dari favorit` : `Simpan ${product.name} ke favorit`} aria-pressed={favorites.includes(product.id)} disabled={!favoritesReady} onClick={() => void toggleFavorite(product.id)}>{favorites.includes(product.id) ? "♥" : "♡"}</button></div>
-      <Link className="product-card-copy" href={`/products/${product.slug}`}><div className="product-card-info"><h2>{product.name}{product.unit_label && <span className="product-card-unit">{product.unit_label}</span>}</h2><p className={`product-stock${stock.inStock ? " is-available" : " is-empty"}`}><svg aria-hidden="true" viewBox="0 0 16 16"><path d="m2 5 6-3 6 3v6l-6 3-6-3V5Z"/><path d="m2 5 6 3 6-3M8 8v6M5 3.5l6 3"/></svg>{stock.label}</p><p className="product-price">{product.variants.length > 1 ? "Mulai " : ""}{priceLabel(product.price.amount, product.price.currency, product.price.position, product.price.symbol)}</p>{product.variants.length > 1 && <small className="product-card-variant-count">{product.variants.length} pilihan ukuran</small>}</div><span className="product-card-open" aria-hidden="true">Lihat detail&nbsp; ↗</span></Link>
+      <div className="product-media"><Link href={detailHref} className="product-image"><Image unoptimized fill sizes="(max-width: 560px) 45vw, (max-width: 850px) 42vw, 24vw" src={storefrontProductPhoto(product)} alt={product.images[0]?.alt ?? product.name} /><BadgeLabel product={product} /></Link><button type="button" className={`product-favorite${favorites.includes(product.id) ? " is-favorite" : ""}`} aria-label={favorites.includes(product.id) ? `Hapus ${product.name} dari favorit` : `Simpan ${product.name} ke favorit`} aria-pressed={favorites.includes(product.id)} disabled={!favoritesReady} onClick={() => void toggleFavorite(product.id)}>{favorites.includes(product.id) ? "♥" : "♡"}</button></div>
+      <Link className="product-card-copy" href={detailHref}><div className="product-card-info"><h2>{product.name}{product.unit_label && <span className="product-card-unit">{product.unit_label}</span>}</h2><p className={`product-stock${stock.inStock ? " is-available" : " is-empty"}`}><svg aria-hidden="true" viewBox="0 0 16 16"><path d="m2 5 6-3 6 3v6l-6 3-6-3V5Z"/><path d="m2 5 6 3 6-3M8 8v6M5 3.5l6 3"/></svg>{stock.label}</p><p className="product-price">{product.variants.length > 1 ? "Mulai " : ""}{priceLabel(product.price.amount, product.price.currency, product.price.position, product.price.symbol)}</p>{product.variants.length > 1 && <small className="product-card-variant-count">{product.variants.length} pilihan ukuran</small>}</div><span className="product-card-open" aria-hidden="true">Lihat detail&nbsp; ↗</span></Link>
     </article>;
     })}</div>;
 }

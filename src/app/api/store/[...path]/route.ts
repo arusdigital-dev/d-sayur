@@ -38,7 +38,8 @@ async function handler(request: NextRequest, context: Context) {
   let body: string | undefined;
   if (request.method !== "GET") {
     body = await request.text();
-    if (body.length > 32_768) return error("REQUEST_TOO_LARGE", "Request terlalu besar.", 413);
+    const maxBodyLength = path.join("/") === "auth/profile" ? 1_500_000 : 32_768;
+    if (body.length > maxBodyLength) return error("REQUEST_TOO_LARGE", "Request terlalu besar.", 413);
   }
 
   try {

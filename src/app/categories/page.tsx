@@ -16,12 +16,19 @@ export default async function CategoriesPage({ searchParams }: { searchParams: P
   const sort = parseSort(params.sort) ?? "popular";
   const filter = parseCatalogFilter(params.filter);
   const page = Math.max(1, Number.parseInt(params.page ?? "1", 10) || 1);
+  const returnParams = new URLSearchParams();
+  if (selectedCategory) returnParams.set("categorySlug", selectedCategory);
+  if (search) returnParams.set("search", search);
+  if (sort !== "popular") returnParams.set("sort", sort);
+  if (filter) returnParams.set("filter", filter);
+  if (page > 1) returnParams.set("page", String(page));
+  const returnTo = `/categories${returnParams.size ? `?${returnParams}` : ""}`;
   const [categories, result] = await Promise.all([
     getCategories().catch(() => []),
     getProducts({ categorySlug: selectedCategory, search, sort, filter, page, limit: 24 }).catch(() => ({ items: [], page, limit: 24, total: 0 })),
   ]);
   const selectedName = categories.find((category) => category.slug === selectedCategory)?.name;
   return <main className="catalog-page ds-catalog"><CatalogToolbar categories={categories} selectedCategory={selectedCategory} search={search} sort={sort} filter={filter} basePath="/categories" title={selectedName ?? "Kategori"} />
-    {result.items.length ? <><ProductGrid products={result.items} /><ProductPagination page={result.page} limit={result.limit} total={result.total} basePath="/categories" query={{ categorySlug: selectedCategory, search, sort, filter }} /></> : <div className="catalog-empty"><span className="empty-art" aria-hidden="true">⌕</span><h2>{filter === "discount" ? "Belum ada produk dengan diskon aktif" : filter === "offers" ? "Belum ada produk dengan penawaran aktif" : selectedName ? `Belum ada produk di ${selectedName}` : "Produk belum tersedia"}</h2><p>{filter ? "Pilih filter lain atau tekan chip yang aktif untuk menghapus filter." : "Pilih kategori lain atau kembali lagi nanti."}</p></div>}
+    {result.items.length ? <><ProductGrid products={result.items} returnTo={returnTo} /><ProductPagination page={result.page} limit={result.limit} total={result.total} basePath="/categories" query={{ categorySlug: selectedCategory, search, sort, filter }} /></> : <div className="catalog-empty"><span className="empty-art" aria-hidden="true">⌕</span><h2>{filter === "discount" ? "Belum ada produk dengan diskon aktif" : filter === "offers" ? "Belum ada produk dengan penawaran aktif" : selectedName ? `Belum ada produk di ${selectedName}` : "Produk belum tersedia"}</h2><p>{filter ? "Pilih filter lain atau tekan chip yang aktif untuk menghapus filter." : "Pilih kategori lain atau kembali lagi nanti."}</p></div>}
   </main>;
 }

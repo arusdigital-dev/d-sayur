@@ -3,6 +3,7 @@ import { customerData } from "@/lib/odoo/customer";
 import type { CartSnapshot, CheckoutSnapshot } from "@/types/store";
 
 export type Customer = { id: number; name: string; email: string; phone: string; is_admin?: boolean };
+export type AccountProfile = { id: number; name: string; email: string; phone: string; avatar_data_url: string | null; joined_at: string | null };
 export type HomeAddress = { id: number; name: string; label: string; street: string; street2: string; city: string; zip: string; phone: string };
 export type StoreBranch = { id: number; name: string; address: string; latitude: number; longitude: number };
 export type HomeDeliverySnapshot = { address: (HomeAddress & { latitude: number | null; longitude: number | null }) | null; branch: StoreBranch | null; branches: StoreBranch[]; eta: { min_minutes: number; max_minutes: number; distance_km: number; deliverable: boolean } | null };
@@ -27,6 +28,11 @@ type CustomerEnvelope = { logged_in: boolean; customer: Customer | null };
 export async function getCustomer() {
   try { return await customerData<CustomerEnvelope>("/dsayur/api/auth/me"); }
   catch { return { logged_in: false, customer: null }; }
+}
+
+export async function getAccountProfile() {
+  try { return await customerData<AccountProfile>("/dsayur/api/auth/profile"); }
+  catch { return null; }
 }
 
 export async function getHomeAddress() {

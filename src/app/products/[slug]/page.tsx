@@ -19,9 +19,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   return { title: product.name, description: description || `Lihat ${product.name} di D-Sayur.`, alternates: { canonical: url }, openGraph: { type: "website", title: product.name, description: description || `Lihat ${product.name} di D-Sayur.`, url, images: [storefrontProductPhoto(product)] } };
 }
 
-export default async function ProductDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function ProductDetailPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ returnTo?: string }> }) {
   await connection();
-  const { slug } = await params;
+  const [{ slug }, query] = await Promise.all([params, searchParams]);
   const product = await getProduct(slug);
   if (!product) notFound();
   const photo = storefrontProductPhoto(product);
@@ -31,7 +31,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     offers: { "@type": "Offer", priceCurrency: product.price.currency, price: product.price.amount, availability: product.available ? "https://schema.org/InStock" : "https://schema.org/OutOfStock", url: new URL(`/products/${product.slug}`, process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").toString() },
   };
   return <main className="product-detail"><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }} />
-    <header className="detail-page-header"><BackButton iconOnly /><strong>Detail Produk</strong><span aria-hidden="true" /></header>
+    <header className="detail-page-header"><BackButton iconOnly returnTo={query.returnTo} /><strong>Detail Produk</strong><span aria-hidden="true" /></header>
     <div className="detail-gallery-column"><ProductGallery images={product.images} fallbackPhoto={photo} fallbackAlt={product.name} /></div>
     <div className="detail-copy">
       <div className="detail-title-row"><div><BadgeLabel product={product} /><h1>{product.name}</h1></div><ProductSocialActions name={product.name} /></div>

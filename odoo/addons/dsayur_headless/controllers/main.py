@@ -1,3 +1,5 @@
+import base64
+import binascii
 import hmac
 import html
 import logging
@@ -13,6 +15,7 @@ from odoo.fields import Domain
 from odoo.http import request
 from odoo.release import version as odoo_version
 from odoo.tools import html2plaintext
+from odoo.tools.binary import BinaryBytes
 
 _logger = logging.getLogger(__name__)
 
@@ -35,7 +38,8 @@ class DSayurHeadless(http.Controller):
         return bool(expected) and hmac.compare_digest(expected.encode(), provided.encode())
 
     def _payload(self):
-        if request.httprequest.content_length and request.httprequest.content_length > 32768:
+        limit = 1_500_000 if request.httprequest.path.endswith("/auth/profile") else 32768
+        if request.httprequest.content_length and request.httprequest.content_length > limit:
             raise ValueError("BODY_TOO_LARGE")
         payload = request.httprequest.get_json(silent=True) or {}
         if not isinstance(payload, dict):
@@ -49,6 +53,25 @@ class DSayurHeadless(http.Controller):
             "currency": currency.name,
             "symbol": currency.symbol,
             "position": "before" if currency.position == "before" else "after",
+        }
+
+    def _customer_profile_payload(self, partner):
+        image_value = partner.image_256
+        image_bytes = image_value.content if image_value else b""
+        image_type = None
+        if image_bytes.startswith(b"\xff\xd8\xff"):
+            image_type = "image/jpeg"
+        elif image_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+            image_type = "image/png"
+        elif image_bytes.startswith(b"RIFF") and image_bytes[8:12] == b"WEBP":
+            image_type = "image/webp"
+        return {
+            "id": partner.id,
+            "name": partner.name or "",
+            "email": partner.email or "",
+            "phone": partner.phone or "",
+            "avatar_data_url": f"data:{image_type};base64,{base64.b64encode(image_bytes).decode('ascii')}" if image_type and image_bytes else None,
+            "joined_at": partner.create_date.isoformat() if partner.create_date else None,
         }
 
     def _branch_payload(self, branch):
@@ -779,15 +802,47 @@ class DSayurHeadless(http.Controller):
                 return self._reply({"logged_in": False, "customer": None})
             return self._reply({"logged_in": True, "customer": {"id": partner.id, "name": partner.name, "email": partner.email or "", "phone": partner.phone or "", "is_admin": request.env.user.has_group("sales_team.group_sale_manager")}})
 
+        if key == "auth/profile" and method == "GET":
+            if not partner:
+                return self._fail("AUTHENTICATION_REQUIRED", "Silakan masuk untuk melihat profil.", 401)
+            return self._reply(self._customer_profile_payload(partner))
+
         if key == "auth/profile" and method == "PATCH":
             if not partner:
                 return self._fail("AUTHENTICATION_REQUIRED", "Silakan masuk untuk mengubah profil.", 401)
-            name = payload.get("name")
-            phone = payload.get("phone", "")
-            if not isinstance(name, str) or not 2 <= len(name.strip()) <= 120 or not isinstance(phone, str) or len(phone.strip()) > 40:
-                return self._fail("PROFILE_INVALID", "Nama harus 2–120 karakter dan telepon maksimal 40 karakter.", 400)
-            partner.sudo().write({"name": name.strip(), "phone": phone.strip()})
-            return self._reply({"name": partner.name, "email": partner.email or "", "phone": partner.phone or ""})
+            values = {}
+            if "name" in payload:
+                name = payload.get("name")
+                if not isinstance(name, str) or not 2 <= len(name.strip()) <= 120:
+                    return self._fail("PROFILE_INVALID", "Nama harus 2–120 karakter.", 400)
+                values["name"] = name.strip()
+            if "phone" in payload:
+                phone = payload.get("phone")
+                if not isinstance(phone, str) or len(phone.strip()) > 40:
+                    return self._fail("PROFILE_INVALID", "Nomor telepon maksimal 40 karakter.", 400)
+                values["phone"] = phone.strip()
+            if "image_data_url" in payload:
+                image_data_url = payload.get("image_data_url")
+                match = re.fullmatch(r"data:image/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})", image_data_url or "") if isinstance(image_data_url, str) else None
+                if not match or len(match.group(2)) > 1_400_000:
+                    return self._fail("PROFILE_IMAGE_INVALID", "Foto profil harus berupa JPG, PNG, atau WebP dan berukuran maksimal 1 MB.", 400)
+                try:
+                    image_bytes = base64.b64decode(match.group(2), validate=True)
+                except (binascii.Error, ValueError):
+                    return self._fail("PROFILE_IMAGE_INVALID", "File foto profil tidak valid.", 400)
+                image_type = match.group(1)
+                valid_signature = (
+                    image_type == "jpeg" and image_bytes.startswith(b"\xff\xd8\xff")
+                    or image_type == "png" and image_bytes.startswith(b"\x89PNG\r\n\x1a\n")
+                    or image_type == "webp" and image_bytes.startswith(b"RIFF") and image_bytes[8:12] == b"WEBP"
+                )
+                if not valid_signature or len(image_bytes) > 1_000_000:
+                    return self._fail("PROFILE_IMAGE_INVALID", "File foto profil tidak valid atau terlalu besar.", 400)
+                values["image_1920"] = BinaryBytes(image_bytes)
+            if not values:
+                return self._fail("PROFILE_INVALID", "Tidak ada perubahan profil untuk disimpan.", 400)
+            partner.sudo().write(values)
+            return self._reply(self._customer_profile_payload(partner))
 
         if key in ("loyalty", "member") and method == "GET":
             if not partner:
