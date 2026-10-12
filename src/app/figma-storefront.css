@@ -652,7 +652,6 @@
     margin: 0 auto;
   }
 }
-
 /* Draw the add glyph from centered strokes so the plus is optically centered
    regardless of the browser's font metrics. */
 .product-add-button { position: relative; display: grid; place-items: center; padding: 0 !important; line-height: 0; }
@@ -856,7 +855,6 @@
     margin: 0;
   }
 }
-
 /* Promo cards can be swiped or scrolled horizontally on every screen size. */
 .ds-promo {
   display: flex;
@@ -1472,6 +1470,7 @@ body.quick-sheet-open { overflow:hidden; }
 .app-shell .ds-catalog .product-card-info { grid-template-rows: 20px 15px 20px auto !important; }
 .app-shell .ds-catalog .product-card-open { position: absolute; right: 10px; bottom: 12px; max-width: 37px; font-size: 9px; white-space: normal; text-align: right; }
 .ds-catalog .product-card-variant-count { font-size: 9px; }
+
 @media (max-width: 390px) {
   .ds-home-header .ds-location-heading { gap: 4px; }
   .ds-home-header .ds-location-heading > small { font-size: 11px; }
@@ -1950,4 +1949,152 @@ body.quick-sheet-open { overflow:hidden; }
 @media (max-width: 700px) {
   .app-shell > main:not(.onboarding-screen) { padding-top: 18px !important; }
   .app-shell > main.order-tracking-page { padding-top: 0 !important; }
+}
+
+/* Keep the product detail action clear after responsive card layout rules. */
+.app-shell .product-card-copy { position: relative !important; }
+.app-shell .product-card-open {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: auto;
+  max-width: none !important;
+  min-height: 30px;
+  box-sizing: border-box;
+  padding: 0 11px;
+  border: 1px solid #0e4c3d;
+  border-radius: 999px;
+  background: #0e4c3d;
+  color: #fff;
+  font-size: 10px !important;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap !important;
+}
+.app-shell .product-card-open > span { font-size: 14px; line-height: 1; }
+.app-shell .product-card-copy:hover .product-card-open { background: #0a3d31; }
+.app-shell .ds-home .ds-products .product-card-copy { padding-bottom: 49px !important; }
+.app-shell .ds-home .ds-products .product-card-open,
+.app-shell .ds-catalog .product-card-open {
+  right: 10px !important;
+  bottom: 8px !important;
+  left: 10px;
+  min-height: 30px;
+}
+.app-shell .ds-catalog .product-card-copy { padding-bottom: 47px !important; }
+@media (max-width: 700px) {
+  .app-shell .ds-catalog .chip-row {
+    gap: 9px !important;
+    padding-top: 3px;
+    padding-bottom: 10px;
+  }
+  .app-shell .ds-catalog .chip-row .chip {
+    min-height: 42px !important;
+    padding: 8px 15px !important;
+    border-radius: 22px;
+    font-size: 13px !important;
+  }
+  .app-shell .ds-catalog .chip-row .chip-filter-icon {
+    width: 42px;
+    min-width: 42px;
+    padding: 0 !important;
+  }
+  .app-shell .ds-catalog .chip-row .chip-filter-icon svg {
+    width: 19px;
+    height: 19px;
+  }
+  .app-shell .ds-catalog .chip-row .chip-sort-popular svg {
+    width: 17px;
+    height: 17px;
+  }
+  .app-shell .ds-checkout-page .checkout-delivery-option {
+    min-height: 58px !important;
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+    gap: 12px;
+    padding: 8px 2px;
+    font-size: 15px !important;
+  }
+  .app-shell .ds-checkout-page .checkout-delivery-option strong { font-size: 15px !important; }
+  .app-shell .ds-checkout-page .checkout-radio-mark { width: 18px; height: 18px; }
+  .app-shell .ds-checkout-page .checkout-delivery-option.selected .checkout-radio-mark { border-width: 5px; }
+  .app-shell .ds-home .ds-products .product-card-copy,
+  .app-shell .ds-catalog .product-card-copy {
+    position: relative !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-content: start;
+    gap: 8px !important;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 9px !important;
+    overflow: visible !important;
+  }
+  .app-shell .ds-home .ds-products .product-card-info,
+  .app-shell .ds-catalog .product-card-info {
+    display: grid !important;
+    grid-template-rows: none !important;
+    gap: 3px !important;
+  }
+  .app-shell .ds-home .ds-products .product-card-open,
+  .app-shell .ds-catalog .product-card-open {
+    position: static !important;
+    justify-self: stretch;
+    width: 100%;
+    min-height: 34px;
+    box-sizing: border-box;
+  }
+}
+@media (min-width: 701px) {
+  .app-shell .ds-home .ds-products .product-card-copy,
+  .app-shell .ds-catalog .product-card-copy {
+    position: relative !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-content: start;
+    gap: 10px !important;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 12px !important;
+    overflow: visible !important;
+  }
+  .app-shell .ds-home .ds-products .product-card-info,
+  .app-shell .ds-catalog .product-card-info {
+    display: grid !important;
+    grid-template-rows: none !important;
+    gap: 4px !important;
+  }
+  .app-shell .ds-home .ds-products .product-card-open,
+  .app-shell .ds-catalog .product-card-open {
+    position: static !important;
+    justify-self: stretch;
+    width: 100%;
+    min-height: 38px;
+    box-sizing: border-box;
+  }
+}
+.app-shell .ds-home .ds-products .product-grid,
+.app-shell .ds-catalog .product-grid { align-items: stretch; }
+.app-shell .ds-home .ds-products .product-card,
+.app-shell .ds-catalog .product-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.app-shell .ds-home .ds-products .product-card-copy,
+.app-shell .ds-catalog .product-card-copy {
+  display: flex !important;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: stretch;
+}
+.app-shell .ds-home .ds-products .product-card-info,
+.app-shell .ds-catalog .product-card-info { flex: 0 0 auto; }
+.app-shell .ds-home .ds-products .product-card-open,
+.app-shell .ds-catalog .product-card-open {
+  position: static !important;
+  align-self: stretch;
+  margin-top: auto;
 }
