@@ -16,6 +16,7 @@ export function LogoutButton() {
     } catch {
       // The BFF clears the local session cookie even if Odoo is unavailable.
     } finally {
+      window.dispatchEvent(new Event("dsayur:auth-changed"));
       router.replace("/");
       router.refresh();
       setPending(false);

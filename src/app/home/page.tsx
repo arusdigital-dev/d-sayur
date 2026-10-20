@@ -1,37 +1,97 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { connection } from "next/server";
-import { getCategories, getProducts } from "@/lib/storefront";
-import { getCustomer, getHomeAddress, getLoyalty } from "@/lib/account-data";
-import { PromoCarousel } from "@/components/home/promo-carousel";
 import { HomeAddressPicker } from "@/components/home/home-address-picker";
-import { HomeCategoryProducts } from "@/components/home/home-category-products";
+import { SpecialCarousel } from "@/components/home/special-carousel";
+import { ProductGrid } from "@/components/product/product-grid";
+import { CartBadge } from "@/components/cart/cart-count";
+import { getCategories, getProducts } from "@/lib/storefront";
+import { getCustomer, getHomeAddress } from "@/lib/account-data";
+import { findHomeCategory, homeAssets } from "@/config/home-assets";
+import styles from "./home.module.css";
 
-export default async function StoreHome({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
+export const metadata: Metadata = {
+  title: "Belanja segar setiap hari",
+  description: "Sayur, buah, dan kebutuhan dapur segar dari D'Sayur.",
+};
+
+const categoryCards = [
+  { title: "Serba Promo", key: "promo", terms: ["promo", "diskon"], href: "/products?filter=discount" },
+  { title: "Siap Masak", key: "readyToCook", terms: ["siap masak", "ready to cook"], href: "" },
+  { title: "Aneka Bumbu", key: "spices", terms: ["bumbu", "rempah"], href: "" },
+  { title: "Produk Beku", key: "frozen", terms: ["beku", "frozen"], href: "" },
+] as const;
+
+export default async function StoreHome() {
   await connection();
-  const params = await searchParams;
-  const requestedPage = Math.max(1, Number.parseInt(params.page ?? "1", 10) || 1);
-  const [session, categories, products] = await Promise.all([
+  const [session, categories, deals, popular] = await Promise.all([
     getCustomer(),
     getCategories().catch(() => []),
-    getProducts({ page: requestedPage, limit: 12, sort: "popular" }).catch(() => ({ items: [], page: requestedPage, limit: 12, total: 0 })),
+    getProducts({ filter: "discount", sort: "popular", page: 1, limit: 4 }).catch(() => ({ items: [], page: 1, limit: 4, total: 0 })),
+    getProducts({ sort: "popular", page: 1, limit: 8 }).catch(() => ({ items: [], page: 1, limit: 8, total: 0 })),
   ]);
-  const [loyalty, homeDelivery] = session.logged_in ? await Promise.all([getLoyalty(), getHomeAddress()]) : [null, null];
+  const homeDelivery = session.logged_in ? await getHomeAddress() : null;
 
-  return <main className="ds-home">
-    <header className="ds-home-header">
+  return <main className={`${styles.home} ds-home`}>
+    <header className={`${styles.header} ds-home-header`}>
       <HomeAddressPicker initialAddress={homeDelivery?.address ?? null} initialBranch={homeDelivery?.branch ?? null} initialEta={homeDelivery?.eta ?? null} loggedIn={session.logged_in} />
-      <Link className="ds-points" href={session.logged_in ? "/account" : "/login"}><span className="ds-points-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 20v-7m0 3c-4.4 0-7-2.5-7-6 4.3 0 7 2.1 7 6Zm0-4c0-4 2.5-6.5 7-6.5 0 4.5-2.6 6.5-7 6.5Z"/><path d="M8.5 20h7"/></svg></span><span className="ds-points-count">{session.logged_in ? `${(loyalty?.cards.reduce((sum, card) => sum + card.points, 0) ?? 0).toLocaleString("id-ID")} Poin` : "Daftar / Masuk"}</span></Link>
+      <Link className={styles.cartLink} href="/cart" aria-label="Buka keranjang"><Image src={homeAssets.icons.cart} alt="" width={24} height={24} /><CartBadge className={styles.badge} /></Link>
     </header>
 
-    <form className="ds-search" action="/products"><span aria-hidden="true">⌕</span><input name="search" aria-label="Cari produk" placeholder="Cari sayur, buah atau bumbu..." /><button aria-label="Cari">Cari</button></form>
+    <Link className={styles.weekendBanner} href="/products?filter=discount" aria-label="Lihat promo akhir pekan">
+      <Image src={homeAssets.weekendBanner} alt="Pilihan sayur segar di pasar" fill priority sizes="(max-width: 520px) 100vw, 520px" />
+      <span className={styles.bannerShade} />
+      <span className={styles.bannerContent}><small>{deals.total > 0 ? "PROMO AKTIF DARI D’SAYUR" : "SEGAR UNTUK AKHIR PEKAN"}</small><strong>{deals.total > 0 ? "Diskon hari ini" : "Sabtu & Minggu"}</strong><span>{deals.total > 0 ? `${deals.total} produk sedang mendapat harga promo.` : "Temukan pilihan segar untuk meja makanmu"}</span><b>{deals.total > 0 ? "Lihat promo" : "Belanja sekarang"} <span aria-hidden="true">→</span></b></span>
+      <span className={styles.bannerDots} aria-hidden="true"><i /><i /><i /></span>
+    </Link>
 
-    <PromoCarousel count={3}>
-      <Link className="ds-promo-card ds-promo-green" href="/products"><Image src="/figma/promo-weekend.png" alt="Sayuran segar untuk pilihan harian" fill sizes="338px" /><span className="ds-promo-label">PILIHAN SEGAR</span><strong>Sayur segar<br />setiap hari</strong><span className="ds-promo-cta">Lihat produk →</span></Link>
-      <Link className="ds-promo-card ds-promo-peach" href="/products"><Image src="/figma/promo-local.jpg" alt="Aneka sayur dan buah segar" fill sizes="338px" priority /><span className="ds-promo-label">PROMO AKHIR PEKAN</span><strong>Cuma di hari<br />Sabtu &amp; Minggu</strong><span className="ds-discount">30%</span><span className="ds-promo-cta">Belanja Sekarang</span></Link>
-      <Link className="ds-promo-card ds-promo-yellow" href="/categories"><Image src="/figma/promo-fresh.png" alt="Pasar sayur dan buah" fill sizes="338px" /><span className="ds-promo-label">DARI PETANI LOKAL</span><strong>Segar setiap<br />hari untukmu</strong><span className="ds-promo-cta">Lihat produk →</span></Link>
-    </PromoCarousel>
+    <form className={styles.search} action="/products" role="search">
+      <Image src={homeAssets.icons.search} alt="" width={24} height={24} />
+      <input name="search" aria-label="Cari produk" placeholder="Cari sayur, buah, dan lainnya" />
+      <button type="submit">Cari</button>
+    </form>
 
-    <HomeCategoryProducts categories={categories} initialListing={products} />
+    <section className={styles.categories} aria-labelledby="home-categories-title">
+      <div className={styles.sectionHeading}><h2 id="home-categories-title">Belanja berdasarkan kategori</h2><Link href="/categories">Lihat semua</Link></div>
+      <div className={styles.categoryRow}>{categoryCards.map((item) => {
+        const category = findHomeCategory(categories, [...item.terms]);
+        const href = item.href || (category ? `/categories?categorySlug=${encodeURIComponent(category.slug)}` : "/categories");
+        return <Link className={styles.categoryCard} href={href} key={item.key}>
+          <span className={styles.categoryImage}><Image src={homeAssets.categories[item.key]} alt="" fill sizes="72px" /></span>
+          <span>{item.title}</span>
+        </Link>;
+      })}</div>
+    </section>
+
+    <section className={styles.productSection} aria-labelledby="home-deals-title">
+      <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>PILIHAN HARI INI</p><h2 id="home-deals-title">Diskon untuk hari ini</h2></div><Link href="/products?filter=discount">Lihat semua</Link></div>
+      {deals.items.length ? <ProductGrid products={deals.items} quickAdd returnTo="/home" className={styles.productGrid} showAvailability={false} showStockQuantity={false} /> : <div className={styles.emptyDeals}><span>Promo baru segera hadir</span><Link href="/products">Jelajahi produk</Link></div>}
+    </section>
+
+    <section className={styles.voucher} aria-label="Voucher pembelian pertama">
+      <span className={styles.voucherIcon}><Image src={homeAssets.icons.discount} alt="" width={48} height={48} /></span>
+      <span className={styles.voucherCopy}><small>KHUSUS PELANGGAN BARU</small><strong>Voucher pembelian pertama</strong><span>Penawaran dapat dilihat saat checkout.</span></span>
+      <Link href={session.logged_in ? "/cart" : "/login?next=%2Fcart"}>Klaim</Link>
+    </section>
+
+    <Link className={styles.membership} href={session.logged_in ? "/account" : "/login?next=%2Faccount"}>
+      <Image className={styles.memberGlow} src={homeAssets.membershipGlow} alt="" width={602} height={602} />
+      <span className={styles.memberBrand} aria-hidden="true"><Image src={homeAssets.membershipLogo} alt="" width={44} height={44} /></span>
+      <span className={styles.memberCopy}><strong>Dapatkan Keuntungan</strong><span>Jadilah member dan kumpulkan poin nikmati lebih banyak keuntungan.</span><b>Lihat benefit dan poin</b></span>
+      <Image className={styles.memberMascot} src={homeAssets.membershipMascot} alt="Ilustrasi maskot D'Sayur" width={145} height={219} />
+    </Link>
+
+    <section className={styles.special} aria-labelledby="home-special-title">
+      <div className={styles.sectionHeading}><h2 id="home-special-title">Special untuk kamu</h2></div>
+      <SpecialCarousel />
+    </section>
+
+    <section className={styles.productSection} aria-labelledby="home-fresh-title">
+      <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>PILIHAN SEGAR</p><h2 id="home-fresh-title">Segar untuk hari ini</h2></div><Link href="/products?sort=popular">Lihat semua</Link></div>
+      {popular.items.length ? <ProductGrid products={popular.items} quickAdd returnTo="/home" className={styles.productGrid} showAvailability={false} showStockQuantity={false} /> : <div className={styles.emptyDeals}><span>Produk belum tersedia.</span><Link href="/products">Coba lagi</Link></div>}
+    </section>
+
+    <p className={styles.promoNote}>Informasi voucher dan paket pilihan di Home merupakan konten tampilan. Promo, harga, stok, dan keranjang tetap mengikuti data Odoo.</p>
   </main>;
 }

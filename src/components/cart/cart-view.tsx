@@ -17,7 +17,7 @@ export function CartView({ initialCart }: { initialCart: CartSnapshot | null }) 
     try {
       const updated = await storeApi<CartSnapshot>(`cart/lines/${lineId}`, { method: "PATCH", body: JSON.stringify({ quantity }) });
       setCart(updated);
-      window.dispatchEvent(new CustomEvent("dsayur:cart-updated", { detail: updated.lines.length }));
+      window.dispatchEvent(new CustomEvent("dsayur:cart-updated", { detail: updated.quantity }));
       setError("");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Perubahan belum berhasil.");

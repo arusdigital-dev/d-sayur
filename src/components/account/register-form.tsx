@@ -17,6 +17,7 @@ export function RegisterForm() {
     const form = new FormData(event.currentTarget);
     try {
       await storeApi("auth/register", { method: "POST", body: JSON.stringify(Object.fromEntries(form)) });
+      window.dispatchEvent(new Event("dsayur:auth-changed"));
       router.replace("/account");
       router.refresh();
     } catch (reason) {

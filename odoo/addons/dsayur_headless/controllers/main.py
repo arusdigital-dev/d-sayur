@@ -55,6 +55,17 @@ class DSayurHeadless(http.Controller):
             "position": "before" if currency.position == "before" else "after",
         }
 
+    def _price_presentation(self, product, amount, currency=None):
+        """Expose Odoo's active pricelist price and its public list-price comparison."""
+        currency = currency or request.env.website.currency_id
+        list_price = product.lst_price
+        is_discounted = amount < list_price
+        return {
+            "price": self._money(amount, currency),
+            "compare_at_price": self._money(list_price, currency) if is_discounted else None,
+            "discount_percent": max(1, int(round((list_price - amount) * 100 / list_price))) if is_discounted and list_price > 0 else 0,
+        }
+
     def _customer_profile_payload(self, partner):
         image_value = partner.image_256
         image_bytes = image_value.content if image_value else b""
@@ -94,7 +105,8 @@ class DSayurHeadless(http.Controller):
         template = product.product_tmpl_id
         website = request.env.website
         pricelist = request.pricelist
-        amount = pricelist._get_product_price(product, 1.0) if pricelist else product.list_price
+        amount = pricelist._get_product_price(product, 1.0) if pricelist else product.lst_price
+        price_data = self._price_presentation(product, amount, pricelist.currency_id if pricelist else website.currency_id)
         image = f"{request.httprequest.host_url.rstrip('/')}/web/image/product.template/{template.id}/image_512"
         images = [{"url": image, "alt": template.name}]
         main_image = template.image_1920
@@ -115,16 +127,18 @@ class DSayurHeadless(http.Controller):
             "slug": template.website_url.rsplit("/", 1)[-1] or str(template.id),
             "name": template.name,
             "description": template.description_sale or template.website_description or "",
-            "price": self._money(amount, pricelist.currency_id if pricelist else website.currency_id),
+            **price_data,
             "images": images,
             "category": {"id": category.id, "slug": str(category.id), "name": category.name} if category else None,
             "variants": [{
                 "id": variant.id,
                 "name": variant.display_name,
                 "attributes": [{"name": line.attribute_id.name, "value": line.name} for line in variant.product_template_attribute_value_ids],
-                # Use the variant's public list price directly. The website pricelist
-                # endpoint currently collapses attribute extras for this API context.
-                "price": self._money(variant.lst_price, pricelist.currency_id if pricelist else website.currency_id),
+                **self._price_presentation(
+                    variant,
+                    pricelist._get_product_price(variant, 1.0) if pricelist else variant.lst_price,
+                    pricelist.currency_id if pricelist else website.currency_id,
+                ),
                 "available": (not template.is_storable) or template.allow_out_of_stock_order or variant.free_qty > 0,
                 "stock_on_hand": variant.qty_available if variant.is_storable else 0,
             } for variant in template.product_variant_ids if variant.active],
@@ -138,6 +152,8 @@ class DSayurHeadless(http.Controller):
         }
 
     def _cart_snapshot(self, order):
+        if not order:
+            return {"id": None, "lines": [], "quantity": 0, "totals": None}
         currency = order.currency_id
         lines = []
         for line in order.order_line.filtered(lambda item: not item.is_delivery and not item.display_type and not item.is_reward_line):
@@ -964,7 +980,9 @@ class DSayurHeadless(http.Controller):
             return self._reply({"logged_in": False})
 
         if key == "cart" and method == "GET":
-            order = self._cart_order(create=True)
+            # A cart badge/read must not create a draft sale order as a side effect.
+            # This endpoint is called by multiple storefront surfaces on initial load.
+            order = self._cart_order(create=False)
             return self._reply(self._cart_snapshot(order))
 
         if key == "orders" and method == "GET":

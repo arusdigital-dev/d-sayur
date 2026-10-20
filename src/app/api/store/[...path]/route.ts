@@ -74,6 +74,10 @@ async function handler(request: NextRequest, context: Context) {
       return response;
     }
     if (cause instanceof Error && cause.message === "ODOO_NOT_CONFIGURED") return error("ODOO_NOT_CONFIGURED", "Odoo belum dikonfigurasi. Isi ODOO_URL dan ODOO_API_KEY.", 503);
+    if (cause instanceof Error && cause.name === "TimeoutError") {
+      console.warn(`D-Sayur Odoo request timed out: ${request.method} ${path.join("/")}`);
+      return error("ODOO_TIMEOUT", "Odoo terlalu lama merespons. Coba lagi sebentar.", 504);
+    }
     console.error("D-Sayur Odoo proxy error:", cause);
     return error("ODOO_UNAVAILABLE", "Layanan toko sedang tidak tersedia. Coba kembali sebentar lagi.", 503);
   }

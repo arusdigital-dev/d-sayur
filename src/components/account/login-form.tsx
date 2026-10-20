@@ -17,6 +17,7 @@ export function LoginForm() {
     const form = new FormData(event.currentTarget);
     try {
       await storeApi("auth/login", { method: "POST", body: JSON.stringify({ login: form.get("login"), password: form.get("password") }) });
+      window.dispatchEvent(new Event("dsayur:auth-changed"));
       const requested = new URLSearchParams(window.location.search).get("next");
       const target = requested ? new URL(requested, window.location.origin) : null;
       router.replace(target?.origin === window.location.origin ? `${target.pathname}${target.search}${target.hash}` : "/account");

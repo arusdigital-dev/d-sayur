@@ -1,13 +1,17 @@
 import type { Metadata } from "next";
+import Image from "next/image";
+import Link from "next/link";
 import { connection } from "next/server";
 import { notFound } from "next/navigation";
 import { getProduct } from "@/lib/storefront";
 import { storefrontProductPhoto } from "@/lib/product-photo";
 import { AddToCartButton } from "@/components/product/add-to-cart-button";
-import { BadgeLabel, PriceMeta } from "@/components/product/product-meta";
+import { BadgeLabel, PriceMeta, StockAvailability } from "@/components/product/product-meta";
 import { ProductGallery } from "@/components/product/product-gallery";
 import { BackButton } from "@/components/product/back-button";
 import { ProductSocialActions } from "@/components/product/product-social-actions";
+import { CartBadge } from "@/components/cart/cart-count";
+import { homeAssets } from "@/config/home-assets";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   await connection();
@@ -31,11 +35,12 @@ export default async function ProductDetailPage({ params, searchParams }: { para
     offers: { "@type": "Offer", priceCurrency: product.price.currency, price: product.price.amount, availability: product.available ? "https://schema.org/InStock" : "https://schema.org/OutOfStock", url: new URL(`/products/${product.slug}`, process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").toString() },
   };
   return <main className="product-detail"><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }} />
-    <header className="detail-page-header"><BackButton iconOnly returnTo={query.returnTo} /><strong>Detail Produk</strong><span aria-hidden="true" /></header>
+    <header className="detail-page-header"><BackButton iconOnly returnTo={query.returnTo} /><strong>Detail Produk</strong><Link className="detail-cart-link" href="/cart" aria-label="Buka keranjang"><Image src={homeAssets.icons.cart} alt="" width={22} height={22} /><CartBadge className="detail-cart-badge" /></Link></header>
     <div className="detail-gallery-column"><ProductGallery images={product.images} fallbackPhoto={photo} fallbackAlt={product.name} /></div>
     <div className="detail-copy">
       <div className="detail-title-row"><div><BadgeLabel product={product} /><h1>{product.name}</h1></div><ProductSocialActions name={product.name} /></div>
       <PriceMeta product={product} withNote />
+      <StockAvailability product={product} />
       <AddToCartButton product={product} />
       <section className="detail-description-block"><h2>Deskripsi</h2><p className="detail-description">{product.description}</p></section>
       {product.umkm && <aside className="umkm-story" aria-label="Cerita UMKM"><small>CERITA UMKM</small><h2>{product.umkm.name}</h2>{product.umkm.origin && <p className="umkm-origin">📍 {product.umkm.origin}</p>}{product.umkm.story && <p>{product.umkm.story}</p>}</aside>}

@@ -1,10 +1,10 @@
 /** Shared API shapes for the Odoo-backed storefront (all values come from the Odoo addon contract). */
 export type ProductImage = { url: string; alt: string };
 export type Money = { amount: number; currency: string; symbol: string; position: "before" | "after" };
-export type ProductVariant = { id: number; name: string; attributes: Array<{ name: string; value: string }>; price: Money; available: boolean; stock_on_hand?: number };
+export type ProductVariant = { id: number; name: string; attributes: Array<{ name: string; value: string }>; price: Money; compare_at_price?: Money | null; discount_percent?: number; available: boolean; stock_on_hand?: number };
 export type ProductBadge = { code: "harvest_today" | "live_fish" | "ready_to_cook" | "umkm"; label: string };
 export type StoreProduct = {
-  id: number; slug: string; name: string; description: string; price: Money; images: ProductImage[];
+  id: number; slug: string; name: string; description: string; price: Money; compare_at_price?: Money | null; discount_percent?: number; images: ProductImage[];
   category: { id: number; slug: string; name: string } | null; variants: ProductVariant[]; available: boolean;
   badge?: ProductBadge | null; unit_label?: string; price_per_kg?: Money | null; weighed?: boolean; stock_on_hand?: number;
   umkm?: { name: string; origin: string; story: string } | null;

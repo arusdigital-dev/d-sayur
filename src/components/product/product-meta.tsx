@@ -10,6 +10,24 @@ export function PriceMeta({ product, withNote = false }: { product: StoreProduct
   </>;
 }
 
+export function StockAvailability({ product }: { product: StoreProduct }) {
+  const stockOnHand = product.stock_on_hand;
+  const hasStockCount = typeof stockOnHand === "number";
+  const quantity = hasStockCount
+    ? new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(stockOnHand)
+    : null;
+  const inStock = hasStockCount ? stockOnHand > 0 : product.available;
+  const label = hasStockCount
+    ? stockOnHand > 0
+      ? `Tersedia ${quantity}`
+      : product.available ? "Pre-order" : "Stok habis"
+    : product.available ? "Tersedia" : "Stok habis";
+
+  return <p className={`detail-stock-status${inStock ? " is-available" : " is-empty"}`}>
+    <span aria-hidden="true" />{label}
+  </p>;
+}
+
 export function BadgeLabel({ product }: { product: StoreProduct }) {
   return product.badge ? <span className={`badge badge-${product.badge.code}`}>{product.badge.label}</span> : null;
 }
