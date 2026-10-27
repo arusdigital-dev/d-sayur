@@ -92,6 +92,5 @@ export default async function StoreHome() {
       {popular.items.length ? <ProductGrid products={popular.items} quickAdd returnTo="/home" className={styles.productGrid} showAvailability={false} showStockQuantity={false} /> : <div className={styles.emptyDeals}><span>Produk belum tersedia.</span><Link href="/products">Coba lagi</Link></div>}
     </section>
 
-    <p className={styles.promoNote}>Informasi voucher dan paket pilihan di Home merupakan konten tampilan. Promo, harga, stok, dan keranjang tetap mengikuti data Odoo.</p>
   </main>;
 }

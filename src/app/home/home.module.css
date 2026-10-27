@@ -108,8 +108,6 @@
   .bundlePhoto, .bundleCopy { animation: none; }
   .bundleDots button { transition: none; }
 }
-.promoNote { margin: 0 auto; max-width: 380px; color: #8a9790; font-size: 9px; line-height: 1.5; text-align: center; }
-
 @media (min-width: 560px) {
   .home { padding-right: 22px; padding-left: 22px; }
   .home.ds-home { padding-right: 22px; padding-left: 22px; }

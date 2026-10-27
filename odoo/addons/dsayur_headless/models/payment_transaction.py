@@ -28,10 +28,12 @@ class PaymentTransaction(models.Model):
     def _xendit_prepare_invoice_request_payload(self):
         """Normalize customer details and let Hosted Checkout offer active channels."""
         payload = super()._xendit_prepare_invoice_request_payload()
-        # D-Sayur charges in Indonesian Rupiah. If an older customer profile has
-        # no country, Odoo otherwise falls back to the company's US country and
-        # Xendit rejects every Indonesian channel for the IDR session.
-        if not self.partner_id.country_id and self.currency_id.name == "IDR":
+        # D-Sayur operates in Indonesia and charges in Indonesian Rupiah. Older
+        # customer records can carry a stale/default country (for example US),
+        # which makes Xendit return INVALID_PAYMENT_CHANNEL for IDR sessions.
+        # Always send Indonesia for our IDR checkout, regardless of the billing
+        # partner's legacy country value.
+        if self.currency_id.name == "IDR":
             payload["country"] = "ID"
         # The storefront presents a single online-payment option. Let Xendit
         # Hosted Checkout offer every channel active for this account instead

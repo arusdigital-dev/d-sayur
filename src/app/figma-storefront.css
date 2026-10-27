@@ -1534,11 +1534,15 @@ body.quick-sheet-open { overflow:hidden; }
 
 /* Product photography fills its frame consistently across storefront surfaces. */
 .app-shell .product-image img,
-.app-shell .detail-image img,
 .app-shell .detail-gallery-thumbnails img,
 .app-shell .cart-line > img,
 .app-shell .checkout-summary-line img {
   object-fit: cover !important;
+  object-position: center center !important;
+  padding: 0 !important;
+}
+.app-shell .detail-image img {
+  object-fit: contain !important;
   object-position: center center !important;
   padding: 0 !important;
 }

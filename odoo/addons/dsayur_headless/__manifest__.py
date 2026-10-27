@@ -10,6 +10,7 @@
         "security/ir.access.csv",
         "data/loyalty_data.xml",
         "data/payment_retry_cron.xml",
+        "data/delivery_slot_cron.xml",
         "data/store_branches.xml",
         "views/delivery_slot_views.xml",
         "views/store_branch_views.xml",
